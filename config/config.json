@@ -1,0 +1,18 @@
+{   
+    "device":           "cuda",
+
+    "users":            100,
+    "fractionPerRound": 0.1,
+    
+    "localBatchSize":   64,
+    "Epoch":            5,
+    
+    "compressor":       "signSGD",
+    
+    "labelsPerUser":    1, 
+    "iid":              0,
+    
+    "logLevel":         "INFO",
+    "trainDataDir":     "/media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/train.dat",
+    "testDataDir":      "/media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/test.dat"
+}
