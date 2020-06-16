@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.functional as F
 
 class naiveMLP(nn.Module):
-    def __init__(self, dim_in, dim_hidden, dim_out):
+    def __init__(self, dim_in,  dim_out, dim_hidden=128):
         super(naiveMLP, self).__init__()
         self.predictor = nn.Sequential(
                             nn.Linear(dim_in, dim_hidden),

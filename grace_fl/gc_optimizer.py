@@ -1,6 +1,7 @@
 import logging
 
 # PyTorch libraries
+import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.optim as optim
@@ -10,25 +11,34 @@ from torch.optim import Optimizer
 from deeplearning import userDataset
 
 class localUpdater(object):
-    def __init__(self, **kwargs):
+    def __init__(self, userConfig):
+        """Construct a local updater for a user.
+
+        Args:
+            lr (float):             learning rate for the user.
+            batchSize (int):        batch size for the user. 
+            localEpoch (int):       training epochs for the user.
+            device (str):           set 'cuda' or 'cpu' for the user. 
+            images (torch.Tensor):  training images of the user.
+            labels (torch.Tensor):  training labels of the user.
+        """
         self.criterion = nn.CrossEntropyLoss()
         
         try:
-            self.lr = kwargs["lr"]
-            self.batchSize = kwargs["batchSize"]
-            self.localEpoch = kwargs["localEpoch"]
-            self.device = kwargs["device"]
+            self.lr = userConfig["lr"]
+            self.batchSize = userConfig["batchSize"]
+            self.localEpoch = userConfig["localEpoch"]
+            self.device = userConfig["device"]
 
-            assert("images" in kwargs)
-            assert("labels" in kwargs)
+            assert("images" in userConfig)
+            assert("labels" in userConfig)
         except [KeyError, AssertionError]:
             logging.error("LocalUpdater Initialization Failure! Input should include `lr`, `batchSize` and `samples`!") 
 
-        self.sampleLoader = DataLoader(userDataset(kwargs["images"], kwargs["labels"]), 
+        self.sampleLoader = DataLoader(userDataset(userConfig["images"], userConfig["labels"]), 
                             batch_size=self.batchSize, 
                             shuffle=True
                             )
-        self.dataVolumeInBit = 0
 
     def localStep(self, model, optimizer):
 
@@ -41,16 +51,71 @@ class localUpdater(object):
             output = model(image)
             loss = self.criterion(output, label)
             loss.backward()
+            optimizer.gather()
 
 
+class _graceOptimizer(Optimizer):
+    """
+    An warpper optimizer gather gradients from local users and overwrite 
+    step() method for the server.
+    """
+    def __init__(self, params, grace):
+        super(self.__class__, self).__init__(params)
+        self.rawBits = 0
+        self.encodedBit = 0
+        self.grace = grace
+        
+        self.gatheredGradients = []
+        for group in self.param_groups:
+            for i, param in enumerate(group["params"]):
+                self.gatheredGradients.append(torch.zeros_like(param, dtype=grace.dtype))
 
-class _graceOptimzer(Optimizer):
-    def __init__(self, params):
-        pass
+    def gather(self):
+        """Gather local gradients and data volume in bits.
+        """
+        for group in self.param_groups:
 
+            for i, param in enumerate(group['params']):
+                if param.grad is None:
+                    continue
+                
+                a_set = self.grace.compress(param.grad.data)
+                self.rawBits += a_set["rawBits"]
+                self.encodedBit += a_set["encodedBits"]
 
+                self.gatheredGradients[i] += self.grace.decompress(a_set["encodedTensor"])                
+                
+                # clear the gradients for next step, which is equivalent to zero_grad()
+                param.grad.detach_()
+                param.grad.zero_() 
 
-def graceOptimizer(optimizer, grace, named_parameters=None):
+    def setParamGroups(self, model):
+        """
+        Set the param_groups with the learnable paramters from a new model.
+
+        Args:
+            model (nn.torch.Module): the new model to be attached to the optimizer.
+        """
+        params = []
+        for param in model.paramters():
+            params.append(param)
+        
+        for group in self.param_groups:
+            group["params"] = params
+
+    def step(self):
+        """Performs a single optimization step.
+        """
+        for group in self.param_groups:
+
+            for i, param in enumerate(group['params']):
+
+                d_param = self.grace.transAggregation(self.gatheredGradients[i])
+
+                param.data.add_(-group['lr'], d_param)
+ 
+
+def graceOptimizer(optimizer, grace):
     """
     An optimizer that wraps another torch.optim.Optimizer.
 
@@ -60,12 +125,11 @@ def graceOptimizer(optimizer, grace, named_parameters=None):
 
     Args:
         optimizer (torch.nn.optim.Optimizer):   Optimizer to use for computing gradients and applying updates.
-        named_parameters (generator of dict):   A mapping between parameter names and values. 
-        grace ():                               Compression algorithm used during allreduce to reduce the amount
+        grace (grace_fl.Compressor):            Compression algorithm used during allreduce to reduce the amount
     """
     # We dynamically create a new class that inherits from the optimizer that was passed in.
     # The goal is to override the `step()` method.
 
     cls = type(optimizer.__class__.__name__, (optimizer.__class__,),
-        dict(_graceOptimzer.__dict__))
-    return cls(optimizer.param_groups, named_parameters, grace)
+        dict(_graceOptimizer.__dict__))
+    return cls(optimizer.param_groups, grace)

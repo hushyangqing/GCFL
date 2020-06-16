@@ -3,12 +3,17 @@ import pickle
 import logging
 
 # PyTorch Libraries
+import torch
 from torch.utils.data import Dataset
 
 class userDataset(Dataset):
     def __init__(self, images, labels):
-        self.images = images
-        self.labels = labels
+        """Construct a user dataset and convert ndarray 
+        """
+        images = (images/255).astype(np.float32)
+        labels = (labels).astype(np.int64)
+        self.images = torch.from_numpy(images)
+        self.labels = torch.from_numpy(labels)
         self.numSamples = images.shape[0]
 
     def __len__(self):
@@ -79,7 +84,7 @@ def usersOwnData(config):
         config (class):    a configuration class.
     
     Returns:
-        dict: a dict contains trainData, testData and userWithData.
+        dict: a dict contains trainData, testData and userWithData[UserID: sampleID].
     """
     
     with open(config.trainDataDir, "rb") as fp:

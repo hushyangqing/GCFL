@@ -1,0 +1,42 @@
+
+# device setting "cuda", "cpu"
+device: cuda
+
+# federated learning
+# users:            number of users
+# randomSampling:   whether or not perform random sampling before each iteration
+# samplingFraction: the fraction of users to sample
+# iid:              whether the data is iid or non-iid.
+# labelsPerUser:    when data is assigned in a no-iid fashion.
+users: 100
+randomSampling: true
+samplingFraction: 0.1
+iid: true
+labelsPerUser: 1
+
+
+# hyperparameters and model type
+# model:        "naiveMLP", "naiveCNN"
+localBatchSize: 256
+lr: 0.1
+epoch: 5
+model: "naiveMLP"
+
+# compressors: signSGD
+compressor:   "signSGD"
+
+# Dataset configurations
+# testDataDir : the directory to the testDataset
+# trainDataDir: the directory to the trainDataset
+# sampleSize:   the size of one sample [height x width/num_of_features]
+# classes:      the class of the sample
+testDataDir: /media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/test.dat
+trainDataDir: /media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/train.dat
+sampleSize:
+- 28
+- 28
+classes: 10
+
+# Log configurations
+logLevel:   "INFO"
+logFile:    "./train.log"

@@ -2,10 +2,13 @@
     "device":           "cuda",
 
     "users":            100,
-    "fractionPerRound": 0.1,
+    "randomSampling":   1,  
+    "samplingFraction": 0.1,
     
     "localBatchSize":   64,
+    "lr":               1e-1,
     "Epoch":            5,
+    "model":            "naiveMLP",
     
     "compressor":       "signSGD",
     
@@ -13,6 +16,9 @@
     "iid":              0,
     
     "logLevel":         "INFO",
+    "logFile":          "./train.log",
+    "sampleSize":       [28, 28],
+    "classes":        10,
     "trainDataDir":     "/media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/train.dat",
     "testDataDir":      "/media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/test.dat"
 }
