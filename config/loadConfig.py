@@ -22,7 +22,7 @@ def loadConfig():
     currentPath = os.path.dirname(__file__)
 
     with open(os.path.join(currentPath, "config.yaml"), "r") as fp:
-        configDict = yaml.load(fp)
+        configDict = yaml.load(fp, Loader=yaml.FullLoader)
 
     # Empty class for yaml loading
     class cfg: pass
@@ -31,3 +31,7 @@ def loadConfig():
         setattr(cfg, key, configDict[key])
 
     return cfg
+
+if __name__ == "__main__":
+    cfg = loadConfig()
+    print(cfg)

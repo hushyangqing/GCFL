@@ -11,12 +11,16 @@ class Compressor(ABC):
         self.tensors_size_are_same = tensors_size_are_same
 
     @abstractmethod
-    def compress(self, tensor):
-        """Compresses a tensor and returns it with the context needed to decompress it."""
+    def register(self, ctx):
+        """register the model information in the model-related compressor"""
 
     @abstractmethod
-    def decompress(self, tensors, ctx):
-        """Decompress the tensor with the given context."""
+    def compress(self, tensor, compress_ctx):
+        """Compresses a tensor with the given compression context, and then returns it with the context needed to decompress it."""
+
+    @abstractmethod
+    def decompress(self, tensors, decompress_ctx):
+        """Decompress the tensor with the given decompression context."""
 
     def transAggregation(self, tensor):
         """Transform a raw aggregation sum. """

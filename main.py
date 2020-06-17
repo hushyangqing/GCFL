@@ -28,6 +28,10 @@ def initLogger(config):
     sh = logging.StreamHandler()
     sh.setLevel(logLevel)
 
+    logger.addHandler(fh)
+    logger.addHandler(sh)
+    logger.info("-"*80)
+
     return logger
 
 def testAccuracy(model, testDataset, device="cuda"):
@@ -38,10 +42,10 @@ def testAccuracy(model, testDataset, device="cuda"):
     # Full Batch testing
     testingDataLoader = DataLoader(dataset=serverDataset, batch_size=serverDataset.__len__())
     for samples in testingDataLoader:
-        results = model(samples.to("device"))
+        results = model(samples["image"].to(device))
     
-    predictedLabels = torch.argmax(results, dim=1).numpy()
-    accuracy = (predictedLabels == testDataset["labels"]) / numSamples
+    predictedLabels = torch.argmax(results, dim=1).detach().cpu().numpy()
+    accuracy = np.sum(predictedLabels == testDataset["labels"]) / numSamples
 
     return accuracy
 
@@ -53,10 +57,10 @@ def trainAccuracy(model, trainDataset, device="cuda"):
     # Full Batch testing
     trainingDataLoader = DataLoader(dataset=serverDataset, batch_size=serverDataset.__len__())
     for samples in trainingDataLoader:
-        results = model(samples.to("device"))
+        results = model(samples["image"].to(device))
     
-    predictedLabels = torch.argmax(results, dim=1).numpy()
-    accuracy = (predictedLabels == trainDataset["labels"]) / numSamples
+    predictedLabels = torch.argmax(results, dim=1).detach().cpu().numpy()
+    accuracy = np.sum(predictedLabels == trainDataset["labels"]) / numSamples
 
     return accuracy
 
@@ -64,6 +68,7 @@ def train(config, logger):
     # initialize the model
     sampleSize = config.sampleSize[0] * config.sampleSize[1]
     classifier = NNRegistry[config.model](dim_in=sampleSize, dim_out=config.classes)
+    classifier.to(config.device)
 
     # initialize the optimizer
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
@@ -75,26 +80,29 @@ def train(config, logger):
     iterationsPerEpoch = iterationsPerEpoch.astype(np.int)
 
     if config.randomSampling:
-        usersToSample = config.users * config.fa
+        usersToSample = int(config.users * config.samplingFraction)
         userIDs = np.arange(config.users) 
 
-    for epoch in range(config.Epoch):
-        logger.info("epoch {:.d}".format(epoch))
-        for iteration in iterationsPerEpoch:
+    for epoch in range(config.epoch):
+        logger.info("epoch {:02d}".format(epoch))
+        for iteration in range(iterationsPerEpoch):
             # sample a fraction of users randomly
             if config.randomSampling:
                 np.random.shuffle(userIDs)
-                userIDs_candidates = userIDs[config.usersToSample]
+                userIDs_candidates = userIDs[:usersToSample]
 
             # Wait for all users aggregating gradients
             for userID in userIDs_candidates:
                 sampleIDs = dataset["userWithData"][userID]
-                userConfig = config.__dict__
+                userConfig = dict(config.__dict__)
                 userConfig["images"] = dataset["trainData"]["images"][sampleIDs]
                 userConfig["labels"] = dataset["trainData"]["labels"][sampleIDs]
                 updater = localUpdater(userConfig)
                 updater.localStep(classifier, optimizer)
 
+            optimizer.step()
+
+            with torch.no_grad():
                 # log train accuracy
                 trainAcc = trainAccuracy(classifier, dataset["testData"], device=config.device)
                 logger.info("Train accuracy {:.4f}".format(trainAcc))
@@ -103,8 +111,6 @@ def train(config, logger):
                 testAcc = testAccuracy(classifier, dataset["testData"], device=config.device)
                 logger.info("Test accuracy {:.4f}".format(testAcc))
     
-            optimizer.step()
-
 
 def main():
     config = loadConfig()

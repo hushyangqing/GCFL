@@ -18,7 +18,7 @@ labelsPerUser: 1
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
 localBatchSize: 256
-lr: 0.1
+lr: 0.01
 epoch: 5
 model: "naiveMLP"
 

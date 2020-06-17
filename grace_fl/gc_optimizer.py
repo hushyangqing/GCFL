@@ -22,12 +22,11 @@ class localUpdater(object):
             images (torch.Tensor):  training images of the user.
             labels (torch.Tensor):  training labels of the user.
         """
-        self.criterion = nn.CrossEntropyLoss()
+        
         
         try:
             self.lr = userConfig["lr"]
-            self.batchSize = userConfig["batchSize"]
-            self.localEpoch = userConfig["localEpoch"]
+            self.batchSize = userConfig["localBatchSize"]
             self.device = userConfig["device"]
 
             assert("images" in userConfig)
@@ -39,6 +38,7 @@ class localUpdater(object):
                             batch_size=self.batchSize, 
                             shuffle=True
                             )
+        self.criterion = nn.CrossEntropyLoss()
 
     def localStep(self, model, optimizer):
 
@@ -64,11 +64,12 @@ class _graceOptimizer(Optimizer):
         self.rawBits = 0
         self.encodedBit = 0
         self.grace = grace
-        
+        self.grace.register(self.param_groups[0]["params"])
+
         self.gatheredGradients = []
         for group in self.param_groups:
             for i, param in enumerate(group["params"]):
-                self.gatheredGradients.append(torch.zeros_like(param, dtype=grace.dtype))
+                self.gatheredGradients.append(torch.zeros_like(param))
 
     def gather(self):
         """Gather local gradients and data volume in bits.
@@ -79,11 +80,9 @@ class _graceOptimizer(Optimizer):
                 if param.grad is None:
                     continue
                 
-                a_set = self.grace.compress(param.grad.data)
-                self.rawBits += a_set["rawBits"]
-                self.encodedBit += a_set["encodedBits"]
+                encodedTensor = self.grace.compress(param.grad.data, param.grad.data)
 
-                self.gatheredGradients[i] += self.grace.decompress(a_set["encodedTensor"])                
+                self.gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)                
                 
                 # clear the gradients for next step, which is equivalent to zero_grad()
                 param.grad.detach_()

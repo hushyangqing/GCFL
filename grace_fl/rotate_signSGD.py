@@ -4,14 +4,14 @@ import torch
 from grace_fl import Compressor
 import grace_fl.constant as const 
 
-class SignSGDCompressor(Compressor):
+class RotateSignSGDCompressor(Compressor):
 
     def __init__(self):
         super().__init__()
         self.dtype = torch.uint8
-        self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
+        self._const_compress_ratio = None
 
-    def compress(self, tensor, **kwargs):
+    def compress(self, tensor):
         """
         Compress the input tensor with signSGD and simulate the saved data volume in bit.
 
@@ -23,9 +23,9 @@ class SignSGDCompressor(Compressor):
 
     def decompress(self, tensors, shape):
         """Decoding the signs to float format """
-        decodedTensor = tensors.type(torch.float32) * 2 - 1
-        decodedTensor = decodedTensor.view(shape)
-        return decodedTensor
+        DecoedTensor = tensors.type(torch.float32) * 2 - 1
+        DecoedTensor = DecoedTensor.view(shape)
+        return DecoedTensor
 
     def compressRatio(self):
         return self._const_compress_ratio
