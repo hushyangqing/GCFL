@@ -98,3 +98,7 @@ archive/
 
 # mkdocs documentation
 /site
+
+# data files
+*.pth
+*.npy
