@@ -82,7 +82,7 @@ def train(config, logger):
     if config.randomSampling:
         usersToSample = int(config.users * config.samplingFraction)
         userIDs = np.arange(config.users) 
-
+    
     for epoch in range(config.epoch):
         logger.info("epoch {:02d}".format(epoch))
         for iteration in range(iterationsPerEpoch):
@@ -98,9 +98,9 @@ def train(config, logger):
                 userConfig["images"] = dataset["trainData"]["images"][sampleIDs]
                 userConfig["labels"] = dataset["trainData"]["labels"][sampleIDs]
                 updater = localUpdater(userConfig)
-                updater.localStep(classifier, optimizer)
+                updater.localStep(classifier, optimizer, turn=iteration)
 
-            optimizer.step()
+            optimizer.step(turn=iteration)
 
             with torch.no_grad():
                 # log train accuracy

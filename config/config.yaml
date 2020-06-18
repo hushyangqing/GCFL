@@ -22,8 +22,9 @@ lr: 0.01
 epoch: 5
 model: "naiveMLP"
 
-# compressors: signSGD
-compressor:   "signSGD"
+# compressors: signSGD, pred_rle_signSGD
+compressor:   "pred_rle_signSGD"
+takeTurns:    true
 
 # Dataset configurations
 # testDataDir : the directory to the testDataset

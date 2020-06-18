@@ -40,7 +40,7 @@ class localUpdater(object):
                             )
         self.criterion = nn.CrossEntropyLoss()
 
-    def localStep(self, model, optimizer):
+    def localStep(self, model, optimizer, **kwargs):
 
         # localEpoch is set to 1
         for i, sample in enumerate(self.sampleLoader):
@@ -51,7 +51,7 @@ class localUpdater(object):
             output = model(image)
             loss = self.criterion(output, label)
             loss.backward()
-            optimizer.gather()
+            optimizer.gather(**kwargs)
 
 
 class _graceOptimizer(Optimizer):
@@ -71,7 +71,7 @@ class _graceOptimizer(Optimizer):
             for i, param in enumerate(group["params"]):
                 self.gatheredGradients.append(torch.zeros_like(param))
 
-    def gather(self):
+    def gather(self, **kwargs):
         """Gather local gradients and data volume in bits.
         """
         for group in self.param_groups:
@@ -80,7 +80,10 @@ class _graceOptimizer(Optimizer):
                 if param.grad is None:
                     continue
                 
-                encodedTensor = self.grace.compress(param.grad.data, param.grad.data)
+                if self.grace._require_grad_idx == True:
+                    kwargs["gradIdx"] = i
+                    
+                encodedTensor = self.grace.compress(param.grad.data, **kwargs)
 
                 self.gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)                
                 
@@ -102,14 +105,14 @@ class _graceOptimizer(Optimizer):
         for group in self.param_groups:
             group["params"] = params
 
-    def step(self):
+    def step(self, **kwargs):
         """Performs a single optimization step.
         """
         for group in self.param_groups:
 
             for i, param in enumerate(group['params']):
 
-                d_param = self.grace.transAggregation(self.gatheredGradients[i])
+                d_param = self.grace.transAggregation(self.gatheredGradients[i], **kwargs)
 
                 param.data.add_(-group['lr'], d_param)
  

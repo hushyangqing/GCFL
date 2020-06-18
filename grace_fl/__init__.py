@@ -6,9 +6,8 @@ from abc import ABC, abstractmethod
 class Compressor(ABC):
     """Interface for compressing and decompressing a given tensor."""
 
-    def __init__(self, average=True, tensors_size_are_same=True):
-        self.average = average
-        self.tensors_size_are_same = tensors_size_are_same
+    def __init__(self):
+        self._require_grad_idx = False
 
     @abstractmethod
     def register(self, ctx):
@@ -31,7 +30,9 @@ class Compressor(ABC):
 
 
 from grace_fl.signSGD import SignSGDCompressor
+from grace_fl.pred_RLE_signSGD import PredRLESignSGDCompressor
 
 compressorRegistry = {
-"signSGD": SignSGDCompressor
+"signSGD": SignSGDCompressor,
+"pred_rle_signSGD": PredRLESignSGDCompressor
 }

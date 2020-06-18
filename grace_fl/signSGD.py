@@ -11,6 +11,10 @@ class SignSGDCompressor(Compressor):
         self.dtype = torch.uint8
         self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
 
+    def register(self):
+        """No requirement to register."""
+        pass
+
     def compress(self, tensor, **kwargs):
         """
         Compress the input tensor with signSGD and simulate the saved data volume in bit.
@@ -30,7 +34,7 @@ class SignSGDCompressor(Compressor):
     def compressRatio(self):
         return self._const_compress_ratio
 
-    def transAggregation(self, tensor):
+    def transAggregation(self, tensor, **kwargs):
         """Transform a raw aggregation sum. 
 
         Args,
