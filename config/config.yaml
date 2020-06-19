@@ -8,18 +8,18 @@ device: cuda
 # samplingFraction: the fraction of users to sample
 # iid:              whether the data is iid or non-iid.
 # labelsPerUser:    when data is assigned in a no-iid fashion.
-users: 100
+users: 1
 randomSampling: true
-samplingFraction: 0.1
+samplingFraction: 1
 iid: true
 labelsPerUser: 1
 
 
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
-localBatchSize: 256
-lr: 0.01
-epoch: 5
+localBatchSize: 30000
+lr: 0.1
+epoch: 50
 model: "naiveMLP"
 
 # compressors: signSGD, pred_rle_signSGD
@@ -29,6 +29,9 @@ model: "naiveMLP"
 compressor:   "pred_signSGD"
 predictive:   true
 takeTurns:    true
+# compressor:   "signSGD"
+# predictive:   false
+# takeTurns:    false
 
 # Dataset configurations
 # testDataDir : the directory to the testDataset

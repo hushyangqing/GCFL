@@ -22,11 +22,11 @@ class SignSGDCompressor(Compressor):
         return encodedTensor
 
     def decompress(self, tensors, shape):
-        """Decoding the signs to float format """
+        """Decode the signs to float format """
         decodedTensor = tensors.type(torch.float32) * 2 - 1
         decodedTensor = decodedTensor.view(shape)
         return decodedTensor
-
+    
     def compressRatio(self):
         return self._const_compress_ratio
 

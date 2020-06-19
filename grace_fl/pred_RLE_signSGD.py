@@ -124,10 +124,23 @@ class PredRLESignSGDCompressor(Compressor):
         return encodedTensor
 
     def decompress(self, codes, shape):
-        """Decoding the tensor codes to float format."""
+        """Decode the tensor codes to float format."""
         decodedTensor = rl_dec(codes)
         decodedTensor = decodedTensor.view(shape)
         decodedTensor = self._current_sign * decodedTensor
+        return decodedTensor
+
+    def decompress_with_reference(self, tensor, refTensor):
+        """Decode the residual tensor given the reference tensor.
+        
+        Args:
+            tensor (torch.tensor, bool):    the residual tensor.
+            refTensor (torch.tensor, bool): the reference tensor.
+        """
+        decodedTensor = torch.where(tensor==1,1-refTensor, refTensor)
+        decodedTensor = decodedTensor.to(torch.float32)
+        decodedTensor *= self._current_sign
+
         return decodedTensor
 
     def compressRatio(self):

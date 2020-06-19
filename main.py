@@ -91,7 +91,7 @@ def train(config, logger):
     optimizer = graceOptimizer(optimizer, grace, mode=mode) # wrap the optimizer
     
     dataset = usersOwnData(config)
-    iterationsPerEpoch = np.ceil(dataset["trainData"]["images"].shape[0]/config.localBatchSize)
+    iterationsPerEpoch = np.ceil((dataset["trainData"]["images"].shape[0]*config.samplingFraction)/config.localBatchSize)
     iterationsPerEpoch = iterationsPerEpoch.astype(np.int)
 
     if config.randomSampling:
@@ -114,17 +114,19 @@ def train(config, logger):
                 userConfig["labels"] = dataset["trainData"]["labels"][sampleIDs]
                 updater = localUpdater(userConfig)
                 updater.localStep(classifier, optimizer, turn=iteration)
-
+            
+            temp = classifier.predictor[0].weight.data.clone()
             optimizer.step()
+            logger.info(torch.sum(temp != classifier.predictor[0].weight.data)) 
 
             with torch.no_grad():
                 # log train accuracy
-                trainAcc = trainAccuracy(classifier, dataset["testData"], device=config.device)
-                logger.info("Train accuracy {:.4f}".format(trainAcc))
+                trainAcc = trainAccuracy(classifier, dataset["trainData"], device=config.device)
 
                 # validate the model and log test accuracy
                 testAcc = testAccuracy(classifier, dataset["testData"], device=config.device)
-                logger.info("Test accuracy {:.4f}".format(testAcc))
+                
+                logger.info("Train accuarcy {:.8f}   Test accuracy {:.8f}".format(trainAcc, testAcc))
     
 
 def main():

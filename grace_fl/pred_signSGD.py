@@ -23,18 +23,12 @@ class PredSignSGDCompressor(Compressor):
             tensor (torch.tensor):  the input tensor.
             turn (int):             odd or even t.
         """
-        try:
-            turn = kwargs["turn"]
-        except KeyError:
-            logging.error("Cannot parse input for pred_signSGD compressor.")
 
         # even turn send the "+" and odd turn send the "-""
-        if turn%2 == 0:
+        if self._current_sign == 1:
             signs = (tensor > const.EPSILON)
-            self._current_sign = 1
         else:
-            signs = (tensor < const.EPSILON)
-            self._current_sign = -1
+            signs = (tensor < -const.EPSILON)
 
         encodedTensor = signs
         return encodedTensor
@@ -48,18 +42,31 @@ class PredSignSGDCompressor(Compressor):
             refTensor (torch.tensor): the reference tensor.
         """
         if self._current_sign == 1:
-            residual = (tensor > 0) != refTensor
+            residual = (tensor > const.EPSILON) != refTensor
         else:
-            residual = (tensor < 0) != refTensor  
+            residual = (tensor < -const.EPSILON) != refTensor  
 
         encodedTensor = residual
         return encodedTensor
 
     def decompress(self, codes, shape):
-        """Decoding the tensor codes to float format."""
+        """Decode the tensor codes to float format."""
         decodedTensor = codes.to(torch.float32)
         decodedTensor = decodedTensor.view(shape)
         decodedTensor = self._current_sign * decodedTensor
+        return decodedTensor
+
+    def decompress_with_reference(self, tensor, refTensor):
+        """Decode the residual tensor given the reference tensor.
+        
+        Args:
+            tensor (torch.tensor):    the residual tensor.
+            refTensor (torch.tensor): the reference tensor.
+        """
+        decodedTensor = torch.where(tensor==1, 1-refTensor, refTensor)
+        decodedTensor = decodedTensor.to(torch.float32)
+        decodedTensor = self._current_sign * decodedTensor
+
         return decodedTensor
 
     def compressRatio(self):
@@ -74,19 +81,10 @@ class PredSignSGDCompressor(Compressor):
 
         onesTensor = torch.ones_like(tensor)
         zerosTensor = torch.zeros_like(tensor)
-        aggedTensor = torch.where(tensor > 0, onesTensor, zerosTensor)
-        aggedTensor = self._current_sign * aggedTensor
+
+        if self._current_sign == 1:
+            aggedTensor = torch.where(tensor > 0, onesTensor, zerosTensor)
+        else:
+            aggedTensor = torch.where(tensor < 0, -onesTensor, zerosTensor)
         return aggedTensor
 
-    def aggregate(self, tensors):
-        """Aggregate a list of tensors.
-        
-        Args,
-            tensors (torch.Tensor): `tensors` have more than three dimensions, which all of 
-                                    the candidates concantented in the first channel.  
-        """
-        
-        aggedTensor = sum(tensors)
-        onesTensor = torch.ones_like(tensor)
-        aggedTensor = torch.where(aggedTensor >=0, onesTensor, -onesTensor)
-        return aggedTensor
