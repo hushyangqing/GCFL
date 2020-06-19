@@ -44,6 +44,8 @@ def parse_config(config):
     else:
         mode = 3
 
+    return mode
+
 def testAccuracy(model, testDataset, device="cuda"):
     
     serverDataset = userDataset(testDataset["images"], testDataset["labels"])

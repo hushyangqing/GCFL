@@ -142,7 +142,8 @@ class PredRLESignSGDCompressor(Compressor):
         """
 
         onesTensor = torch.ones_like(tensor)
-        aggedTensor = torch.where(tensor > 0, onesTensor, -onesTensor)
+        zerosTensor = torch.zeros_like(tensor)
+        aggedTensor = torch.where(tensor > 0, onesTensor, zerosTensor)
         aggedTensor = self._current_sign * aggedTensor
         return aggedTensor
 

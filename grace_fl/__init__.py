@@ -26,10 +26,11 @@ class Compressor(ABC):
 
 
 from grace_fl.signSGD import SignSGDCompressor
+from grace_fl.pred_signSGD import PredSignSGDCompressor
 from grace_fl.pred_RLE_signSGD import PredRLESignSGDCompressor
 
 compressorRegistry = {
 "signSGD": SignSGDCompressor,
-"pred_signSGD": 
+"pred_signSGD": PredSignSGDCompressor,
 "pred_rle_signSGD": PredRLESignSGDCompressor
 }

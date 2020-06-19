@@ -8,14 +8,12 @@ import torch
 from grace_fl import Compressor
 import grace_fl.constant as const 
     
-class PredRLESignSGDCompressor(Compressor):
-
+class PredSignSGDCompressor(Compressor):
     def __init__(self):
         super().__init__()
         self.dtype = torch.uint8
-        self._const_compress_ratio = False
+        self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
         self.compress_ratios = []
-        self._code_dtype_bit = const.NIBBLE_BIT
 
     def compress(self, tensor, **kwargs):
         """
@@ -38,12 +36,7 @@ class PredRLESignSGDCompressor(Compressor):
             signs = (tensor < const.EPSILON)
             self._current_sign = -1
 
-        encodedTensor = rl_enc(signs)
-
-        rawBits = torch.prod(torch.tensor(tensor.shape)) * const.FLOAT_BIT
-        codedBits = torch.tensor(len(encodedTensor) * self._code_dtype_bit, dtype=torch.float)
-        self.compress_ratios.append(rawBits/codedBits)
-
+        encodedTensor = signs
         return encodedTensor
 
     def compress_with_reference(self, tensor, refTensor):
@@ -59,24 +52,18 @@ class PredRLESignSGDCompressor(Compressor):
         else:
             residual = (tensor < 0) != refTensor  
 
-        encodedTensor = rl_enc(residual)
-
-        rawBits = torch.prod(torch.tensor(tensor.shape)) * const.FLOAT_BIT
-        codedBits = torch.tensor(len(encodedTensor) * self._code_dtype_bit, dtype=torch.float)
-        self.compress_ratios.append(rawBits/codedBits)
-
+        encodedTensor = residual
         return encodedTensor
 
     def decompress(self, codes, shape):
         """Decoding the tensor codes to float format."""
-        decodedTensor = rl_dec(codes)
+        decodedTensor = codes.to(torch.float32)
         decodedTensor = decodedTensor.view(shape)
         decodedTensor = self._current_sign * decodedTensor
         return decodedTensor
 
     def compressRatio(self):
-        """Take the average of compress ratio array as an estimation."""
-        return np.mean(np.asarray(self.compress_ratios))
+        return self._const_compress_ratio
 
     def transAggregation(self, tensor):
         """Transform a raw aggregation sum. 
@@ -86,7 +73,8 @@ class PredRLESignSGDCompressor(Compressor):
         """
 
         onesTensor = torch.ones_like(tensor)
-        aggedTensor = torch.where(tensor > 0, onesTensor, -onesTensor)
+        zerosTensor = torch.zeros_like(tensor)
+        aggedTensor = torch.where(tensor > 0, onesTensor, zerosTensor)
         aggedTensor = self._current_sign * aggedTensor
         return aggedTensor
 

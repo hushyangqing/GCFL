@@ -44,8 +44,8 @@ class localUpdater(object):
 
     def localStep(self, model, optimizer, **kwargs):
 
-        # localEpoch is set to 1
-        for i, sample in enumerate(self.sampleLoader):
+        # localEpoch and iteration is set to 1
+        for sample in self.sampleLoader:
             
             image = sample["image"].to(self.device)
             label = sample["label"].to(self.device)
@@ -54,6 +54,8 @@ class localUpdater(object):
             loss = self.criterion(output, label)
             loss.backward()
             optimizer.gather(**kwargs)
+
+            break
 
 class _graceOptimizer(Optimizer):
     """
@@ -133,7 +135,7 @@ class _predTurnOptimizer(Optimizer):
         """
         try:
             self.turn = kwargs["turn"]
-            self._current_sign = 1 if turn%2 == 0 else -1
+            self._current_sign = 1 if self.turn%2 == 0 else -1
         except KeyError:
             logging.error("Turn trick cannot be applied without 'turn' parameters.")
 
@@ -144,7 +146,7 @@ class _predTurnOptimizer(Optimizer):
                 
                 # if buffer is empty, encode the gradient
                 if self._buffer_empty:
-                    codedTensor = self.grace.compress(param.grad.data, kwargs)
+                    encodedTensor = self.grace.compress(param.grad.data, turn=self.turn)
                     self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)
                 # if buffer in nonempty, encode the residual
                 elif self._current_sign == 1:
@@ -163,6 +165,7 @@ class _predTurnOptimizer(Optimizer):
                 param.grad.detach_()
                 param.grad.zero_() 
 
+
     def step(self):
         """Performs a single optimization step.
         """
@@ -174,10 +177,10 @@ class _predTurnOptimizer(Optimizer):
                 # register buffer
                 if self._current_sign == 1:
                     self._plus_sign_buffer[i] = d_param
-                    self._minus_sign_buffer[i] = self.grace.transAggregation(self._minus_sign_buffer)            
+                    self._minus_sign_buffer[i] = self.grace.transAggregation(self._minus_sign_buffer[i])            
                 else:
                     self._minus_sign_buffer = d_param
-                    self._plus_sign_buffer[i] = self.grace.transAggregation(self._plus_sign_buffer)
+                    self._plus_sign_buffer[i] = self.grace.transAggregation(self._plus_sign_buffer[i])
 
                 param.data.add_(-group['lr'], d_param)
 
@@ -209,8 +212,8 @@ def graceOptimizer(optimizer, grace, **kwargs):
     if mode==0:
         cls = type(optimizer.__class__.__name__, (optimizer.__class__,),
         dict(_predTurnOptimizer.__dict__))
-
     else:
         cls = type(optimizer.__class__.__name__, (optimizer.__class__,),
             dict(_graceOptimizer.__dict__))
+
     return cls(optimizer.param_groups, grace, **kwargs)
