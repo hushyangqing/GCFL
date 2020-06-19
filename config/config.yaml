@@ -23,7 +23,10 @@ epoch: 5
 model: "naiveMLP"
 
 # compressors: signSGD, pred_rle_signSGD
+# predictive: apply predictive encoding  
+# takeTurns: apply the trick of taking turns rto send "+" and "-"
 compressor:   "pred_rle_signSGD"
+predictive:   true
 takeTurns:    true
 
 # Dataset configurations

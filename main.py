@@ -34,6 +34,16 @@ def initLogger(config):
 
     return logger
 
+def parse_config(config):
+    if config.predictive and config.takeTurns:
+        mode = 0
+    elif config.predictive:
+        mode = 1
+    elif config.takeTurns:
+        mode = 2
+    else:
+        mode = 3
+
 def testAccuracy(model, testDataset, device="cuda"):
     
     serverDataset = userDataset(testDataset["images"], testDataset["labels"])
@@ -69,11 +79,14 @@ def train(config, logger):
     sampleSize = config.sampleSize[0] * config.sampleSize[1]
     classifier = NNRegistry[config.model](dim_in=sampleSize, dim_out=config.classes)
     classifier.to(config.device)
+    
+    # Parse the configuration and fetch mode code for the optimizer
+    mode = parse_config(config)
 
-    # initialize the optimizer
+    # initialize the optimizer for the server model
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
     grace = compressorRegistry[config.compressor]()
-    optimizer = graceOptimizer(optimizer, grace) # wrap the optimizer
+    optimizer = graceOptimizer(optimizer, grace, mode=mode) # wrap the optimizer
     
     dataset = usersOwnData(config)
     iterationsPerEpoch = np.ceil(dataset["trainData"]["images"].shape[0]/config.localBatchSize)
@@ -100,7 +113,7 @@ def train(config, logger):
                 updater = localUpdater(userConfig)
                 updater.localStep(classifier, optimizer, turn=iteration)
 
-            optimizer.step(turn=iteration)
+            optimizer.step()
 
             with torch.no_grad():
                 # log train accuracy
@@ -117,7 +130,6 @@ def main():
     logger = initLogger(config)
     train(config, logger)
     
-
 
 if __name__ == "__main__":
     main()

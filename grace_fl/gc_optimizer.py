@@ -8,6 +8,7 @@ import torch.optim as optim
 from torch.optim import Optimizer
 
 # My libraries
+import grace_fl.constant as const
 from deeplearning import userDataset
 
 class localUpdater(object):
@@ -28,6 +29,7 @@ class localUpdater(object):
             self.lr = userConfig["lr"]
             self.batchSize = userConfig["localBatchSize"]
             self.device = userConfig["device"]
+            self.buffer = userConfig["device"]
 
             assert("images" in userConfig)
             assert("labels" in userConfig)
@@ -53,57 +55,40 @@ class localUpdater(object):
             loss.backward()
             optimizer.gather(**kwargs)
 
-
 class _graceOptimizer(Optimizer):
     """
-    An warpper optimizer gather gradients from local users and overwrite 
+    A warpper optimizer gather gradients from local users and overwrite 
     step() method for the server.
+
+    Args:
+        params (nn.Module.parameters): model learnable parameters.
     """
-    def __init__(self, params, grace):
+    def __init__(self, params, grace, **kwargs):
         super(self.__class__, self).__init__(params)
         self.rawBits = 0
         self.encodedBit = 0
         self.grace = grace
-        self.grace.register(self.param_groups[0]["params"])
 
-        self.gatheredGradients = []
+        self._gatheredGradients = []
         for group in self.param_groups:
             for i, param in enumerate(group["params"]):
-                self.gatheredGradients.append(torch.zeros_like(param))
+                self._gatheredGradients.append(torch.zeros_like(param))
 
     def gather(self, **kwargs):
-        """Gather local gradients and data volume in bits.
+        """Gather local gradients.
         """
         for group in self.param_groups:
-
             for i, param in enumerate(group['params']):
                 if param.grad is None:
                     continue
-                
-                if self.grace._require_grad_idx == True:
-                    kwargs["gradIdx"] = i
                     
                 encodedTensor = self.grace.compress(param.grad.data, **kwargs)
 
-                self.gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)                
+                self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)                
                 
                 # clear the gradients for next step, which is equivalent to zero_grad()
                 param.grad.detach_()
                 param.grad.zero_() 
-
-    def setParamGroups(self, model):
-        """
-        Set the param_groups with the learnable paramters from a new model.
-
-        Args:
-            model (nn.torch.Module): the new model to be attached to the optimizer.
-        """
-        params = []
-        for param in model.paramters():
-            params.append(param)
-        
-        for group in self.param_groups:
-            group["params"] = params
 
     def step(self, **kwargs):
         """Performs a single optimization step.
@@ -112,12 +97,94 @@ class _graceOptimizer(Optimizer):
 
             for i, param in enumerate(group['params']):
 
-                d_param = self.grace.transAggregation(self.gatheredGradients[i], **kwargs)
+                d_param = self.grace.transAggregation(self._gatheredGradients[i], **kwargs)
 
                 param.data.add_(-group['lr'], d_param)
- 
+    
 
-def graceOptimizer(optimizer, grace):
+class _predTurnOptimizer(Optimizer):
+    """
+    A warpper optimizer which implements predictive encoding with turn trick.
+    It gather gradients residuals ("+" residual for even turns and "-" residual for 
+    odd turns) from local users and overwrite step() method for the server.
+
+    Args:
+        params (nn.Module.parameters): model learnable parameters.
+    """
+    def __init__(self, params, grace, **kwargs):
+        super(self.__class__, self).__init__(params)
+        self.rawBits = 0
+        self.encodedBit = 0
+        self.grace = grace
+
+        self._current_sign = 1
+        self._gatheredGradients = []
+        self._plus_sign_buffer = []
+        self._minus_sign_buffer = []
+        self._buffer_empty = True
+        for group in self.param_groups:
+            for i, param in enumerate(group["params"]):
+                self._gatheredGradients.append(torch.zeros_like(param))
+                self._plus_sign_buffer.append(torch.zeros_like(param))
+                self._minus_sign_buffer.append(torch.zeros_like(param))
+
+    def gather(self, **kwargs):
+        """Gather local gradients.
+        """
+        try:
+            self.turn = kwargs["turn"]
+            self._current_sign = 1 if turn%2 == 0 else -1
+        except KeyError:
+            logging.error("Turn trick cannot be applied without 'turn' parameters.")
+
+        for group in self.param_groups:
+            for i, param in enumerate(group['params']):
+                if param.grad is None:
+                    continue
+                
+                # if buffer is empty, encode the gradient
+                if self._buffer_empty:
+                    codedTensor = self.grace.compress(param.grad.data, kwargs)
+                    self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)
+                # if buffer in nonempty, encode the residual
+                elif self._current_sign == 1:
+                    codedTensor = self.grace.compress_with_reference(param.grad, self._plus_sign_buffer)
+                    self._gatheredGradients += self.decompress_with_reference(codedTensor, self._plus_sign_buffer)
+                else:
+                    codedTensor = self.grace.compress_with_reference(param.grad, self._minus_sign_buffer)
+                    self._gatheredGradients += self.decompress_with_reference(codedTensor, self._minus_sign_buffer)
+
+                if self._current_sign == 1:
+                    self._minus_sign_buffer[i] += (param.grad.data < const.EPSILON)
+                else:
+                    self._plus_sign_buffer[i] += (param.grad.data > const.EPSILON)
+
+                # clear the gradients for next step, which is equivalent to zero_grad()
+                param.grad.detach_()
+                param.grad.zero_() 
+
+    def step(self):
+        """Performs a single optimization step.
+        """
+
+        for group in self.param_groups:
+            for i, param in enumerate(group['params']):
+                d_param = self.grace.transAggregation(self._gatheredGradients[i])
+                
+                # register buffer
+                if self._current_sign == 1:
+                    self._plus_sign_buffer[i] = d_param
+                    self._minus_sign_buffer[i] = self.grace.transAggregation(self._minus_sign_buffer)            
+                else:
+                    self._minus_sign_buffer = d_param
+                    self._plus_sign_buffer[i] = self.grace.transAggregation(self._plus_sign_buffer)
+
+                param.data.add_(-group['lr'], d_param)
+
+        self._buffer_empty = False
+
+
+def graceOptimizer(optimizer, grace, **kwargs):
     """
     An optimizer that wraps another torch.optim.Optimizer.
 
@@ -128,10 +195,22 @@ def graceOptimizer(optimizer, grace):
     Args:
         optimizer (torch.nn.optim.Optimizer):   Optimizer to use for computing gradients and applying updates.
         grace (grace_fl.Compressor):            Compression algorithm used during allreduce to reduce the amount
+        mode (int):                             mode represents different implementations of optimizer.
     """
     # We dynamically create a new class that inherits from the optimizer that was passed in.
     # The goal is to override the `step()` method.
 
-    cls = type(optimizer.__class__.__name__, (optimizer.__class__,),
-        dict(_graceOptimizer.__dict__))
-    return cls(optimizer.param_groups, grace)
+    """>>> TODO: add another 2 modes"""
+    if "mode" in kwargs:
+        mode = kwargs["mode"]
+    else:
+        mode = 3
+
+    if mode==0:
+        cls = type(optimizer.__class__.__name__, (optimizer.__class__,),
+        dict(_predTurnOptimizer.__dict__))
+
+    else:
+        cls = type(optimizer.__class__.__name__, (optimizer.__class__,),
+            dict(_graceOptimizer.__dict__))
+    return cls(optimizer.param_groups, grace, **kwargs)

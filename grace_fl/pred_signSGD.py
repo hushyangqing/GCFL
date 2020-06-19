@@ -7,63 +7,7 @@ import torch
 # My libraries
 from grace_fl import Compressor
 import grace_fl.constant as const 
-
-def rl_enc(tensor, thres=const.NIBBLE_BIT):
-    """run-length encoding for a binary tensor. 
-    """
-    clonedTensor = tensor.flatten().clone()
-    currSymbol = 0 if clonedTensor[0] == 0 else 1 
-    codedSeqs = []
-    runLength = 0
     
-    iter = 0
-    bitThreshold = 2**thres 
-    for element in clonedTensor:
-        iter += 1
-
-        if element == currSymbol:
-            runLength += 1
-            if runLength >= bitThreshold - 1:
-                codedSeqs.append(runLength)
-                codedSeqs.append(currSymbol)
-
-                runLength = 0
-        else:
-            codedSeqs.append(runLength)
-            codedSeqs.append(currSymbol)
-            
-            runLength = 1
-            currSymbol = 0 if element == 0 else 1 
-
-    # Last part of the code sequence
-    codedSeqs.append(runLength)
-    codedSeqs.append(currSymbol)
-    
-    codedSeqs = torch.from_numpy(np.asarray(codedSeqs))
-    codedSeqs = codedSeqs.to(tensor.device)
-    return codedSeqs
-
-def rl_dec(codedSeqs):
-    """run-length decoding from a code sequence. The first element is set to zero by force.
-    """
-    
-    decodedTensor = []
-    step = 2
-    symbols = [codedSeqs[i] for i in range(1, len(codedSeqs), step)]
-    runLengths = [codedSeqs[i] for i in range(0, len(codedSeqs), step)]
-    
-    for symbol, runLength in zip(symbols, runLengths):
-        for iter in range(runLength):
-            decodedTensor.append(symbol)
-
-    decodedTensor = torch.tensor(decodedTensor)
-    decodedTensor = decodedTensor.to(torch.float32)
-    decodedTensor = decodedTensor.to(codedSeqs.device)
-    decodedTensor = decodedTensor.flatten()
-
-    return decodedTensor
-    
-
 class PredRLESignSGDCompressor(Compressor):
 
     def __init__(self):

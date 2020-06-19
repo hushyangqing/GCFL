@@ -10,10 +10,6 @@ class Compressor(ABC):
         self._require_grad_idx = False
 
     @abstractmethod
-    def register(self, ctx):
-        """register the model information in the model-related compressor"""
-
-    @abstractmethod
     def compress(self, tensor, compress_ctx):
         """Compresses a tensor with the given compression context, and then returns it with the context needed to decompress it."""
 
@@ -34,5 +30,6 @@ from grace_fl.pred_RLE_signSGD import PredRLESignSGDCompressor
 
 compressorRegistry = {
 "signSGD": SignSGDCompressor,
+"pred_signSGD": 
 "pred_rle_signSGD": PredRLESignSGDCompressor
 }
