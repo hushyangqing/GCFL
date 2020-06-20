@@ -115,9 +115,7 @@ def train(config, logger):
                 updater = localUpdater(userConfig)
                 updater.localStep(classifier, optimizer, turn=iteration)
             
-            temp = classifier.predictor[0].weight.data.clone()
             optimizer.step()
-            logger.info(torch.sum(temp != classifier.predictor[0].weight.data)) 
 
             with torch.no_grad():
                 # log train accuracy
@@ -127,8 +125,10 @@ def train(config, logger):
                 testAcc = testAccuracy(classifier, dataset["testData"], device=config.device)
                 
                 logger.info("Train accuarcy {:.8f}   Test accuracy {:.8f}".format(trainAcc, testAcc))
-    
 
+        logger.info("Averaged compression ratio: {:.8f}".format(optimizer.grace.compressRatio))
+        optimizer.grace.reset()
+        
 def main():
     config = loadConfig()
     logger = initLogger(config)

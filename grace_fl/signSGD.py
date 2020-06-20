@@ -27,6 +27,7 @@ class SignSGDCompressor(Compressor):
         decodedTensor = decodedTensor.view(shape)
         return decodedTensor
     
+    @property
     def compressRatio(self):
         return self._const_compress_ratio
 

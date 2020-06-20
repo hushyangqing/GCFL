@@ -17,6 +17,9 @@ class Compressor(ABC):
     def decompress(self, tensors, decompress_ctx):
         """Decompress the tensor with the given decompression context."""
 
+    def reset(self):
+        pass
+
     def transAggregation(self, tensor):
         """Transform a raw aggregation sum. """
 

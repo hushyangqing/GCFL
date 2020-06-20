@@ -124,13 +124,11 @@ class _predTurnOptimizer(Optimizer):
         self._plus_sign_buffer = []
         self._minus_sign_buffer = []
         self._buffer_empty = True
-        self._debug_gt_grad = []
         for group in self.param_groups:
             for i, param in enumerate(group["params"]):
                 self._gatheredGradients.append(torch.zeros_like(param))
                 self._plus_sign_buffer.append(torch.zeros_like(param))
                 self._minus_sign_buffer.append(torch.zeros_like(param))
-                self._debug_gt_grad.append(torch.zeros_like(param))
 
     def gather(self, **kwargs):
         """Gather local gradients.
@@ -146,7 +144,6 @@ class _predTurnOptimizer(Optimizer):
                 if param.grad is None:
                     continue
                 
-                self._debug_gt_grad[i] += param.grad.data 
 
                 # if buffer is empty, encode the gradient
                 if self._buffer_empty:
@@ -188,12 +185,89 @@ class _predTurnOptimizer(Optimizer):
                 
                 param.data.add_(-group["lr"], d_param)
                 self._gatheredGradients[i].zero_()
-                # if self.grace._current_sign == 1:
-                #     param.data.add_(-group['lr'], (self._debug_gt_grad[i] > const.EPSILON))
-                # else:
-                #     param.data.add_(-group['lr'], (self._debug_gt_grad[i] < -const.EPSILON))
-                    
-                # self._debug_gt_grad[i].zero_()
+                
+        self._buffer_empty = False
+
+class _predSkipStepOptimizer(Optimizer):
+    """
+    A warpper optimizer which implements predictive encoding with turn trick.
+    It gather gradients residuals ("+" residual for even turns and "-" residual for 
+    odd turns) from local users and overwrite step() method for the server.
+
+    Args:
+        params (nn.Module.parameters): model learnable parameters.
+    """
+    def __init__(self, params, grace, **kwargs):
+        super(self.__class__, self).__init__(params)
+        self.rawBits = 0
+        self.encodedBit = 0
+        self.grace = grace
+
+        self.grace._current_sign = 1
+        self._gatheredGradients = []
+        self._plus_sign_buffer = []
+        self._minus_sign_buffer = []
+        self._buffer_empty = True
+        for group in self.param_groups:
+            for i, param in enumerate(group["params"]):
+                self._gatheredGradients.append(torch.zeros_like(param))
+                self._plus_sign_buffer.append(torch.zeros_like(param))
+                self._minus_sign_buffer.append(torch.zeros_like(param))
+
+    def gather(self, **kwargs):
+        """Gather local gradients.
+        """
+        try:
+            self.turn = kwargs["turn"]
+            self.grace._current_sign = 1 if self.turn%2 == 0 else -1
+        except KeyError:
+            logging.error("Turn trick cannot be applied without 'turn' parameters.")
+
+        for group in self.param_groups:
+            for i, param in enumerate(group['params']):
+                if param.grad is None:
+                    continue
+                
+                # if buffer is empty, encode the gradient
+                if self._buffer_empty:
+                    encodedTensor = self.grace.compress(param.grad.data, turn=self.turn)
+                    self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)
+                # if buffer in nonempty, encode the residual
+                elif self.grace._current_sign == 1:
+                    encodedTensor = self.grace.compress_with_reference(param.grad, self._plus_sign_buffer[i])
+                    self._gatheredGradients[i] += self.grace.decompress_with_reference(encodedTensor, self._plus_sign_buffer[i])
+                else:
+                    encodedTensor = self.grace.compress_with_reference(param.grad, self._minus_sign_buffer[i])
+                    self._gatheredGradients[i] += self.grace.decompress_with_reference(encodedTensor, self._minus_sign_buffer[i])
+
+                if self.grace._current_sign == 1:
+                    self._minus_sign_buffer[i] += (param.grad.data < -const.EPSILON)
+                else:
+                    self._plus_sign_buffer[i] += (param.grad.data > const.EPSILON)
+
+                # clear the gradients for next step, which is equivalent to zero_grad()
+                param.grad.detach_()
+                param.grad.zero_() 
+
+
+    def step(self):
+        """Performs a single optimization step.
+        """
+
+        for group in self.param_groups:
+            for i, param in enumerate(group['params']):
+                d_param = self.grace.transAggregation(self._gatheredGradients[i])
+
+                # register buffer
+                if self.grace._current_sign == 1:
+                    self._plus_sign_buffer[i].zero_()
+                    self._minus_sign_buffer[i] = self.grace.transAggregation(self._minus_sign_buffer[i])            
+                else:
+                    self._minus_sign_buffer[i].zero_()
+                    self._plus_sign_buffer[i] = self.grace.transAggregation(self._plus_sign_buffer[i])
+                
+                param.data.add_(-group["lr"], d_param)
+                self._gatheredGradients[i].zero_()
                 
         self._buffer_empty = False
 

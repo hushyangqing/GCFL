@@ -7,10 +7,11 @@ import torch
 # My libraries
 from grace_fl import Compressor
 import grace_fl.constant as const 
-    
+
 class PredSignSGDCompressor(Compressor):
     def __init__(self):
         super().__init__()
+        self._current_sign = 1
         self.dtype = torch.uint8
         self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
         self.compress_ratios = []
@@ -48,6 +49,10 @@ class PredSignSGDCompressor(Compressor):
 
         encodedTensor = residual
         return encodedTensor
+    
+    @property
+    def compressRatio(self):
+        return self._const_compress_ratio
 
     def decompress(self, codes, shape):
         """Decode the tensor codes to float format."""

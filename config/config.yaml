@@ -17,16 +17,16 @@ labelsPerUser: 1
 
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
-localBatchSize: 30000
+localBatchSize: 60000
 lr: 0.1
-epoch: 50
+epoch: 20
 model: "naiveMLP"
 
 # compressors: signSGD, pred_rle_signSGD
 # predictive: apply predictive encoding  
 # takeTurns: apply the trick of taking turns rto send "+" and "-"
-# compressor:   "pred_rle_signSGD"
-compressor:   "pred_signSGD"
+compressor:   "pred_rle_signSGD"
+# compressor:   "pred_signSGD"
 predictive:   true
 takeTurns:    true
 # compressor:   "signSGD"
