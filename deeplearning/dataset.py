@@ -6,7 +6,7 @@ import logging
 import torch
 from torch.utils.data import Dataset
 
-class userDataset(Dataset):
+class UserDataset(Dataset):
     def __init__(self, images, labels):
         """Construct a user dataset and convert ndarray 
         """
@@ -25,7 +25,7 @@ class userDataset(Dataset):
         return dict(image=image, label=label)
 
 
-def dataAssign(dataset, iid=1, numUsers=1, **kwargs):
+def assign_data(dataset, iid=1, numUsers=1, **kwargs):
     """
     Assign dataset to multiple users.
 
@@ -76,7 +76,7 @@ def dataAssign(dataset, iid=1, numUsers=1, **kwargs):
 
     return userWithData
 
-def usersOwnData(config):
+def assign_user_data(config):
     """
     Load data and generate userWithData dict given the configuration.
 
@@ -93,7 +93,7 @@ def usersOwnData(config):
     with open(config.testDataDir, "rb") as fp:
         testData = pickle.load(fp)
 
-    userWithData = dataAssign(dataset = trainData, 
+    userWithData = assign_data(dataset = trainData, 
                               iid = config.iid, 
                               numUsers = config.users, 
                               labelsPerUser = config.labelsPerUser)

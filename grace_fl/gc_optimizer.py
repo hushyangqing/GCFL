@@ -9,9 +9,9 @@ from torch.optim import Optimizer
 
 # My libraries
 import grace_fl.constant as const
-from deeplearning import userDataset
+from deeplearning import UserDataset
 
-class localUpdater(object):
+class LocalUpdater(object):
     def __init__(self, userConfig):
         """Construct a local updater for a user.
 
@@ -36,13 +36,13 @@ class localUpdater(object):
         except [KeyError, AssertionError]:
             logging.error("LocalUpdater Initialization Failure! Input should include `lr`, `batchSize` and `samples`!") 
 
-        self.sampleLoader = DataLoader(userDataset(userConfig["images"], userConfig["labels"]), 
+        self.sampleLoader = DataLoader(UserDataset(userConfig["images"], userConfig["labels"]), 
                             batch_size=self.batchSize, 
                             shuffle=True
                             )
         self.criterion = nn.CrossEntropyLoss()
 
-    def localStep(self, model, optimizer, **kwargs):
+    def local_step(self, model, optimizer, **kwargs):
 
         # localEpoch and iteration is set to 1
         for sample in self.sampleLoader:
@@ -272,7 +272,7 @@ class _predSkipStepOptimizer(Optimizer):
         self._buffer_empty = False
 
 
-def graceOptimizer(optimizer, grace, **kwargs):
+def grace_optimizer(optimizer, grace, **kwargs):
     """
     An optimizer that wraps another torch.optim.Optimizer.
 

@@ -32,7 +32,7 @@ from grace_fl.signSGD import SignSGDCompressor
 from grace_fl.pred_signSGD import PredSignSGDCompressor
 from grace_fl.pred_RLE_signSGD import PredRLESignSGDCompressor
 
-compressorRegistry = {
+compressor_registry = {
 "signSGD": SignSGDCompressor,
 "pred_signSGD": PredSignSGDCompressor,
 "pred_rle_signSGD": PredRLESignSGDCompressor

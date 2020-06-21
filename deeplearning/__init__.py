@@ -1,7 +1,7 @@
-from .dataset import usersOwnData, userDataset
-from .networks import naiveMLP, naiveCNN
+from .dataset import UserDataset, assign_user_data
+from .networks import NaiveMLP, NaiveCNN
 
-NNRegistry = {
-"naiveMLP": naiveMLP,
-"naiveCNN": naiveCNN,
+nn_registry = {
+"naiveMLP": NaiveMLP,
+"naiveCNN": NaiveCNN,
 }

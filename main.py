@@ -9,14 +9,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 # My libraries
-from config import loadConfig
-from deeplearning import NNRegistry
-from deeplearning.dataset import userDataset, usersOwnData
-from deeplearning.networks import naiveMLP
-from grace_fl import compressorRegistry
-from grace_fl.gc_optimizer import graceOptimizer, localUpdater
+from config import load_config
+from deeplearning import nn_registry
+from deeplearning.dataset import UserDataset, assign_user_data
+from grace_fl import compressor_registry
+from grace_fl.gc_optimizer import grace_optimizer, LocalUpdater
 
-def initLogger(config):
+def init_logger(config):
     """Initialize a logger object. 
     """
     logLevel = config.logLevel
@@ -46,51 +45,61 @@ def parse_config(config):
 
     return mode
 
-def testAccuracy(model, testDataset, device="cuda"):
+def test_accuracy(model, test_dataset, device="cuda"):
     
-    serverDataset = userDataset(testDataset["images"], testDataset["labels"])
-    numSamples = testDataset["labels"].shape[0]
+    server_dataset = UserDataset(test_dataset["images"], test_dataset["labels"])
+    num_samples = test_dataset["labels"].shape[0]
 
     # Full Batch testing
-    testingDataLoader = DataLoader(dataset=serverDataset, batch_size=serverDataset.__len__())
-    for samples in testingDataLoader:
+    testing_data_loader = DataLoader(dataset=server_dataset, batch_size=len(server_dataset))
+    for samples in testing_data_loader:
         results = model(samples["image"].to(device))
     
-    predictedLabels = torch.argmax(results, dim=1).detach().cpu().numpy()
-    accuracy = np.sum(predictedLabels == testDataset["labels"]) / numSamples
+    predicted_labels = torch.argmax(results, dim=1).detach().cpu().numpy()
+    accuracy = np.sum(predicted_labels == test_dataset["labels"]) / num_samples
 
     return accuracy
 
-def trainAccuracy(model, trainDataset, device="cuda"):
+def train_accuracy(model, train_dataset, device="cuda"):
 
-    serverDataset = userDataset(trainDataset["images"], trainDataset["labels"])
-    numSamples = trainDataset["labels"].shape[0]
+    server_dataset = UserDataset(train_dataset["images"], train_dataset["labels"])
+    num_samples = train_dataset["labels"].shape[0]
 
     # Full Batch testing
-    trainingDataLoader = DataLoader(dataset=serverDataset, batch_size=serverDataset.__len__())
-    for samples in trainingDataLoader:
+    training_data_loader = DataLoader(dataset=server_dataset, batch_size=len(server_dataset))
+    for samples in training_data_loader:
         results = model(samples["image"].to(device))
     
-    predictedLabels = torch.argmax(results, dim=1).detach().cpu().numpy()
-    accuracy = np.sum(predictedLabels == trainDataset["labels"]) / numSamples
+    predicted_labels = torch.argmax(results, dim=1).detach().cpu().numpy()
+    accuracy = np.sum(predicted_labels == train_dataset["labels"]) / num_samples
 
     return accuracy
 
-def train(config, logger):
+def train(config, logger, recoder):
+    """Simulate Federated Learning training process. 
+    
+    Args:
+        config (object class)
+    """
     # initialize the model
     sampleSize = config.sampleSize[0] * config.sampleSize[1]
-    classifier = NNRegistry[config.model](dim_in=sampleSize, dim_out=config.classes)
+    classifier = nn_registry[config.model](dim_in=sampleSize, dim_out=config.classes)
     classifier.to(config.device)
     
     # Parse the configuration and fetch mode code for the optimizer
     mode = parse_config(config)
 
+    # initialize data recoder 
+    recoder["compress_ratio"] = []
+    recoder["training_accuracy"] = []
+    recoder["training_accuracy"] = []
+
     # initialize the optimizer for the server model
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
-    grace = compressorRegistry[config.compressor]()
-    optimizer = graceOptimizer(optimizer, grace, mode=mode) # wrap the optimizer
+    grace = compressor_registry[config.compressor]()
+    optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
     
-    dataset = usersOwnData(config)
+    dataset = assign_user_data(config)
     iterationsPerEpoch = np.ceil((dataset["trainData"]["images"].shape[0]*config.samplingFraction)/config.localBatchSize)
     iterationsPerEpoch = iterationsPerEpoch.astype(np.int)
 
@@ -112,28 +121,32 @@ def train(config, logger):
                 userConfig = dict(config.__dict__)
                 userConfig["images"] = dataset["trainData"]["images"][sampleIDs]
                 userConfig["labels"] = dataset["trainData"]["labels"][sampleIDs]
-                updater = localUpdater(userConfig)
-                updater.localStep(classifier, optimizer, turn=iteration)
+                updater = LocalUpdater(userConfig)
+                updater.local_step(classifier, optimizer, turn=iteration)
             
             optimizer.step()
 
             with torch.no_grad():
                 # log train accuracy
-                trainAcc = trainAccuracy(classifier, dataset["trainData"], device=config.device)
+                trainAcc = train_accuracy(classifier, dataset["trainData"], device=config.device)
 
                 # validate the model and log test accuracy
-                testAcc = testAccuracy(classifier, dataset["testData"], device=config.device)
+                testAcc = test_accuracy(classifier, dataset["testData"], device=config.device)
                 
                 logger.info("Train accuarcy {:.8f}   Test accuracy {:.8f}".format(trainAcc, testAcc))
 
-        logger.info("Averaged compression ratio: {:.8f}".format(optimizer.grace.compressRatio))
+        recoder["compress_ratio"].append(optimizer.grace.compressRatio)
+        logger.info("Averaged compression ratio: {:.8f}".format(recoder["compress_ratio"][-1]))
         optimizer.grace.reset()
-        
+
 def main():
-    config = loadConfig()
-    logger = initLogger(config)
-    train(config, logger)
+    config = load_config()
+    logger = init_logger(config)
+    recoder = {}
+    train(config, logger, recoder)
     
+    with open("train_record.dat", "wb") as fp:
+        pickle.dump(recoder, fp)
 
 if __name__ == "__main__":
     main()

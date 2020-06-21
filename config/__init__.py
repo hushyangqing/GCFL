@@ -1,1 +1,1 @@
-from .loadConfig import loadConfig
+from .loadconfig import load_config

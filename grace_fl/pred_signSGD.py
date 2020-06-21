@@ -49,10 +49,6 @@ class PredSignSGDCompressor(Compressor):
 
         encodedTensor = residual
         return encodedTensor
-    
-    @property
-    def compressRatio(self):
-        return self._const_compress_ratio
 
     def decompress(self, codes, shape):
         """Decode the tensor codes to float format."""
@@ -74,6 +70,7 @@ class PredSignSGDCompressor(Compressor):
 
         return decodedTensor
 
+    @property
     def compressRatio(self):
         return self._const_compress_ratio
 
