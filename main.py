@@ -1,6 +1,7 @@
-import numpy as np
+import  os
 import pickle
 import logging
+import numpy as np
 
 # PyTorch libraries
 import torch
@@ -11,21 +12,21 @@ from torch.utils.data import DataLoader
 # My libraries
 from config import load_config
 from deeplearning import nn_registry
-from deeplearning.dataset import UserDataset, assign_user_data
 from grace_fl import compressor_registry
 from grace_fl.gc_optimizer import grace_optimizer, LocalUpdater
+from deeplearning.dataset import UserDataset, assign_user_data, assign_user_resource
 
 def init_logger(config):
     """Initialize a logger object. 
     """
-    logLevel = config.logLevel
+    log_level = config.log_level
     logger = logging.getLogger(__name__)
-    logger.setLevel(logLevel)
+    logger.setLevel(log_level)
 
-    fh = logging.FileHandler(config.logFile)
-    fh.setLevel(logLevel)
+    fh = logging.FileHandler(config.log_file)
+    fh.setLevel(log_level)
     sh = logging.StreamHandler()
-    sh.setLevel(logLevel)
+    sh.setLevel(log_level)
 
     logger.addHandler(fh)
     logger.addHandler(sh)
@@ -34,7 +35,7 @@ def init_logger(config):
     return logger
 
 def parse_config(config):
-    if config.predictive and config.takeTurns:
+    if config.predictive and config.take_turns:
         mode = 0
     elif config.predictive:
         mode = 1
@@ -44,6 +45,11 @@ def parse_config(config):
         mode = 3
 
     return mode
+
+def save_record(file_path, record):
+    current_path = os.path.fi
+    with open(file_path, "rb") as fp:
+        pickle.dump(record, fp)
 
 def test_accuracy(model, test_dataset, device="cuda"):
     
@@ -75,24 +81,24 @@ def train_accuracy(model, train_dataset, device="cuda"):
 
     return accuracy
 
-def train(config, logger, recoder):
+def train(config, logger, record):
     """Simulate Federated Learning training process. 
     
     Args:
         config (object class)
     """
     # initialize the model
-    sampleSize = config.sampleSize[0] * config.sampleSize[1]
-    classifier = nn_registry[config.model](dim_in=sampleSize, dim_out=config.classes)
+    sample_size = config.sample_size[0] * config.sample_size[1]
+    classifier = nn_registry[config.model](dim_in=sample_size, dim_out=config.classes)
     classifier.to(config.device)
     
     # Parse the configuration and fetch mode code for the optimizer
     mode = parse_config(config)
 
-    # initialize data recoder 
-    recoder["compress_ratio"] = []
-    recoder["training_accuracy"] = []
-    recoder["training_accuracy"] = []
+    # initialize data record 
+    record["compress_ratio"] = []
+    record["training_accuracy"] = []
+    record["testing_accuracy"] = []
 
     # initialize the optimizer for the server model
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
@@ -100,53 +106,51 @@ def train(config, logger, recoder):
     optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
     
     dataset = assign_user_data(config)
-    iterationsPerEpoch = np.ceil((dataset["trainData"]["images"].shape[0]*config.samplingFraction)/config.localBatchSize)
+    iterationsPerEpoch = np.ceil((dataset["train_data"]["images"].shape[0] * config.sampling_fraction) / config.local_batch_size)
     iterationsPerEpoch = iterationsPerEpoch.astype(np.int)
 
-    if config.randomSampling:
-        usersToSample = int(config.users * config.samplingFraction)
+    if config.random_sampling:
+        users_to_sample = int(config.users * config.sampling_fraction)
         userIDs = np.arange(config.users) 
     
     for epoch in range(config.epoch):
         logger.info("epoch {:02d}".format(epoch))
         for iteration in range(iterationsPerEpoch):
             # sample a fraction of users randomly
-            if config.randomSampling:
+            if config.random_sampling:
                 np.random.shuffle(userIDs)
-                userIDs_candidates = userIDs[:usersToSample]
+                userIDs_candidates = userIDs[:users_to_sample]
 
             # Wait for all users aggregating gradients
             for userID in userIDs_candidates:
-                sampleIDs = dataset["userWithData"][userID]
-                userConfig = dict(config.__dict__)
-                userConfig["images"] = dataset["trainData"]["images"][sampleIDs]
-                userConfig["labels"] = dataset["trainData"]["labels"][sampleIDs]
-                updater = LocalUpdater(userConfig)
+                user_resource = assign_user_resource(config, userID, 
+                                                     dataset["train_data"],  
+                                                     dataset["user_with_data"])
+                updater = LocalUpdater(user_resource)
                 updater.local_step(classifier, optimizer, turn=iteration)
             
             optimizer.step()
 
             with torch.no_grad():
                 # log train accuracy
-                trainAcc = train_accuracy(classifier, dataset["trainData"], device=config.device)
+                trainAcc = train_accuracy(classifier, dataset["train_data"], device=config.device)
 
                 # validate the model and log test accuracy
-                testAcc = test_accuracy(classifier, dataset["testData"], device=config.device)
-                
-                logger.info("Train accuarcy {:.8f}   Test accuracy {:.8f}".format(trainAcc, testAcc))
+                testAcc = test_accuracy(classifier, dataset["test_data"], device=config.device)
+                record["training_accuracy"].append(trainAcc)
+                record["testing_accuracy"].append(testAcc)
+                logger.info("Train accuracy {:.4f}   Test accuracy {:.4f}".format(trainAcc, testAcc))
 
-        recoder["compress_ratio"].append(optimizer.grace.compressRatio)
-        logger.info("Averaged compression ratio: {:.8f}".format(recoder["compress_ratio"][-1]))
+        record["compress_ratio"].append(optimizer.grace.compressRatio)
+        logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
         optimizer.grace.reset()
 
 def main():
     config = load_config()
     logger = init_logger(config)
-    recoder = {}
-    train(config, logger, recoder)
-    
-    with open("train_record.dat", "wb") as fp:
-        pickle.dump(recoder, fp)
+    record = {}
+    train(config, logger, record)
+    save_record(config.record_dir, record)
 
 if __name__ == "__main__":
     main()

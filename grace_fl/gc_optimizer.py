@@ -12,7 +12,7 @@ import grace_fl.constant as const
 from deeplearning import UserDataset
 
 class LocalUpdater(object):
-    def __init__(self, userConfig):
+    def __init__(self, user_resource):
         """Construct a local updater for a user.
 
         Args:
@@ -26,17 +26,18 @@ class LocalUpdater(object):
         
         
         try:
-            self.lr = userConfig["lr"]
-            self.batchSize = userConfig["localBatchSize"]
-            self.device = userConfig["device"]
-            self.buffer = userConfig["device"]
+            self.lr = user_resource["lr"]
+            self.batchSize = user_resource["batch_size"]
+            self.device = user_resource["device"]
 
-            assert("images" in userConfig)
-            assert("labels" in userConfig)
-        except [KeyError, AssertionError]:
-            logging.error("LocalUpdater Initialization Failure! Input should include `lr`, `batchSize` and `samples`!") 
+            assert("images" in user_resource)
+            assert("labels" in user_resource)
+        except KeyError:
+            logging.error("LocalUpdater Initialization Failure! Input should include `lr`, `batchSize`!") 
+        except AssertionError:
+            logging.error("LocalUpdater Initialization Failure! Input should include samples!") 
 
-        self.sampleLoader = DataLoader(UserDataset(userConfig["images"], userConfig["labels"]), 
+        self.sampleLoader = DataLoader(UserDataset(user_resource["images"], user_resource["labels"]), 
                             batch_size=self.batchSize, 
                             shuffle=True
                             )
