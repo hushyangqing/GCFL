@@ -17,11 +17,12 @@ class Compressor(ABC):
     def decompress(self, tensors, decompress_ctx):
         """Decompress the tensor with the given decompression context."""
 
-    def reset(self):
-        pass
+    @abstractmethod
+    def compress_ratio(self):
+        """Estimated compression ratio of the compressor."""
 
-    def transAggregation(self, tensor):
-        """Transform a raw aggregation sum. """
+    def trans_aggregation(self, tensor):
+        """Transform a raw aggregation sum."""
 
     def aggregate(self, tensors):
         """Aggregate a list of tensors."""

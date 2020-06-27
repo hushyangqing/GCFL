@@ -9,24 +9,24 @@ from grace_fl import Compressor
 import grace_fl.constant as const 
 
 class PredSignSGDCompressor(Compressor):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
-        self._current_sign = 1
         self.dtype = torch.uint8
+        self.majority_thres = int(0.5 * config.users * config.sampling_fraction)
         self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
         self.compress_ratios = []
 
-    def compress(self, tensor, **kwargs):
+    def compress(self, tensor, sign):
         """
         Compress the input tensor with run-length of sign and simulate the saved data volume in bit.
 
         Args,
             tensor (torch.tensor):  the input tensor.
-            turn (int):             odd or even t.
+            sign (int):             1 for "+" and -1 for "-".
         """
 
         # even turn send the "+" and odd turn send the "-""
-        if self._current_sign == 1:
+        if sign == 1:
             signs = (tensor > const.EPSILON)
         else:
             signs = (tensor < -const.EPSILON)
@@ -34,7 +34,7 @@ class PredSignSGDCompressor(Compressor):
         encodedTensor = signs
         return encodedTensor
 
-    def compress_with_reference(self, tensor, refTensor):
+    def compress_with_reference(self, tensor, refTensor, sign):
         """
         Given a reference sign tensor, compress the residual between the input tensor and the reference with run-length encoding.
 
@@ -42,10 +42,10 @@ class PredSignSGDCompressor(Compressor):
             tensor (torch.tensor):  the input tensor.
             refTensor (torch.tensor): the reference tensor.
         """
-        if self._current_sign == 1:
-            residual = (tensor > const.EPSILON) != refTensor
+        if sign == 1:
+            residual = ((tensor > const.EPSILON) != refTensor)
         else:
-            residual = (tensor < -const.EPSILON) != refTensor  
+            residual = ((tensor < -const.EPSILON) != refTensor) 
 
         encodedTensor = residual
         return encodedTensor
@@ -71,10 +71,10 @@ class PredSignSGDCompressor(Compressor):
         return decodedTensor
 
     @property
-    def compressRatio(self):
+    def compress_ratio(self):
         return self._const_compress_ratio
 
-    def transAggregation(self, tensor):
+    def trans_aggregation(self, tensor):
         """Transform a raw aggregation sum. 
 
         Args,
@@ -83,10 +83,6 @@ class PredSignSGDCompressor(Compressor):
 
         onesTensor = torch.ones_like(tensor)
         zerosTensor = torch.zeros_like(tensor)
-
-        if self._current_sign == 1:
-            aggedTensor = torch.where(tensor > 0, onesTensor, zerosTensor)
-        else:
-            aggedTensor = torch.where(tensor < 0, -onesTensor, zerosTensor)
+        aggedTensor = torch.where(tensor > self.majority_thres, onesTensor, zerosTensor)
         return aggedTensor
 

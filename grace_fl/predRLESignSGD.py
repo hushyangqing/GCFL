@@ -66,33 +66,27 @@ def rl_dec(codedSeqs):
 
 class PredRLESignSGDCompressor(Compressor):
 
-    def __init__(self):
+    def __init__(self, thres):
         super().__init__()
-        self._current_sign = 1
         self._const_compress_ratio = False
         self.compress_ratios = []
-        self._code_dtype_bit = const.NIBBLE_BIT
+        self._code_dtype_bit = const.WORD_BIT
+        self.th = thres
 
-    def compress(self, tensor, **kwargs):
+    def compress(self, tensor, sign):
         """
         Compress the input tensor with run-length of sign and simulate the saved data volume in bit.
 
         Args,
             tensor (torch.tensor):  the input tensor.
-            turn (int):             odd or even t.
+            sign (int):             1 for "+" and -1 for "-".
         """
-        try:
-            turn = kwargs["turn"]
-        except KeyError:
-            logging.error("Cannot parse input for pred_signSGD compressor.")
-
-        # even turn send the "+" and odd turn send the "-""
-        if self._current_sign == 1:
+        if sign == 1:
             signs = (tensor > const.EPSILON)
         else:
             signs = (tensor < -const.EPSILON)
             
-        encodedTensor = rl_enc(signs)
+        encodedTensor = rl_enc(signs, thres=self._code_dtype_bit)
 
         rawBits = torch.prod(torch.tensor(tensor.shape)) * const.FLOAT_BIT
         codedBits = torch.tensor(len(encodedTensor) * self._code_dtype_bit, dtype=torch.float)
@@ -100,22 +94,24 @@ class PredRLESignSGDCompressor(Compressor):
 
         return encodedTensor
 
-    def compress_with_reference(self, tensor, refTensor):
+    def compress_with_reference(self, tensor, refTensor, sign):
         """
         Given a reference sign tensor, compress the residual between the input tensor and the reference with run-length encoding.
 
         Args,
             tensor (torch.tensor):  the input tensor.
             refTensor (torch.tensor): the reference tensor.
+            sign (int):             1 for "+" and -1 for "-"
         """
 
-        if self._current_sign == 1:
-            residual = (tensor > 0) != refTensor
+        if sign == 1:
+            residual = ((tensor > 0) != refTensor)
         else:
-            residual = (tensor < 0) != refTensor  
+            residual = ((tensor < 0) != refTensor)
 
-        encodedTensor = rl_enc(residual)
+        encodedTensor = rl_enc(residual, thres=self._code_dtype_bit)
 
+        # Push dynamic compression ratio
         rawBits = torch.prod(torch.tensor(tensor.shape)) * const.FLOAT_BIT
         codedBits = torch.tensor(len(encodedTensor) * self._code_dtype_bit, dtype=torch.float)
         self.compress_ratios.append(rawBits/codedBits)
@@ -126,7 +122,7 @@ class PredRLESignSGDCompressor(Compressor):
         """Decode the tensor codes to float format."""
         decodedTensor = rl_dec(codes)
         decodedTensor = decodedTensor.view(shape)
-        decodedTensor = self._current_sign * decodedTensor
+        decodedTensor = decodedTensor
         return decodedTensor
 
     def decompress_with_reference(self, tensor, refTensor):
@@ -140,19 +136,18 @@ class PredRLESignSGDCompressor(Compressor):
         decodedTensor = decodedTensor.view_as(refTensor)
         decodedTensor = torch.where(decodedTensor==1,1-refTensor, refTensor)
         decodedTensor = decodedTensor.to(torch.float32)
-        decodedTensor *= self._current_sign
 
         return decodedTensor
 
     @property
-    def compressRatio(self):
+    def compress_ratio(self):
         """Take the average of compress ratio array as an estimation."""
         return np.mean(np.asarray(self.compress_ratios))
 
     def reset(self):
         self.compress_ratios = []
 
-    def transAggregation(self, tensor):
+    def trans_aggregation(self, tensor):
         """Transform a raw aggregation sum. 
 
         Args,
@@ -161,11 +156,7 @@ class PredRLESignSGDCompressor(Compressor):
 
         onesTensor = torch.ones_like(tensor)
         zerosTensor = torch.zeros_like(tensor)
-
-        if self._current_sign == 1:
-            aggedTensor = torch.where(tensor > 0, onesTensor, zerosTensor)
-        else:
-            aggedTensor = torch.where(tensor < 0, -onesTensor, zerosTensor)
+        aggedTensor = torch.where(tensor > self.th, onesTensor, zerosTensor)
         return aggedTensor
 
     def aggregate(self, tensors):
@@ -178,5 +169,6 @@ class PredRLESignSGDCompressor(Compressor):
         
         aggedTensor = sum(tensors)
         onesTensor = torch.ones_like(tensor)
-        aggedTensor = torch.where(aggedTensor >=0, onesTensor, -onesTensor)
+        zerosTensor = torch.zeros_like(tensors)
+        aggedTensor = torch.where(aggedTensor > self.th, onesTensor, zerosTensor)
         return aggedTensor

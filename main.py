@@ -39,7 +39,7 @@ def parse_config(config):
         mode = 0
     elif config.predictive:
         mode = 1
-    elif config.takeTurns:
+    elif config.take_turns:
         mode = 2
     else:
         mode = 3
@@ -47,8 +47,8 @@ def parse_config(config):
     return mode
 
 def save_record(file_path, record):
-    current_path = os.path.fi
-    with open(file_path, "rb") as fp:
+    current_path = os.path.dirname(__file__)
+    with open(os.path.join(current_path, file_path), "wb") as fp:
         pickle.dump(record, fp)
 
 def test_accuracy(model, test_dataset, device="cuda"):
@@ -100,22 +100,27 @@ def train(config, logger, record):
     record["training_accuracy"] = []
     record["testing_accuracy"] = []
 
+    # initialize userIDs
+    if config.random_sampling:
+        users_to_sample = int(config.users * config.sampling_fraction)
+        userIDs = np.arange(config.users) 
+
     # initialize the optimizer for the server model
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
-    grace = compressor_registry[config.compressor]()
+    grace = compressor_registry[config.compressor](config)
     optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
     
     dataset = assign_user_data(config)
     iterationsPerEpoch = np.ceil((dataset["train_data"]["images"].shape[0] * config.sampling_fraction) / config.local_batch_size)
     iterationsPerEpoch = iterationsPerEpoch.astype(np.int)
 
-    if config.random_sampling:
-        users_to_sample = int(config.users * config.sampling_fraction)
-        userIDs = np.arange(config.users) 
+
     
+    global_turn = -1
     for epoch in range(config.epoch):
         logger.info("epoch {:02d}".format(epoch))
         for iteration in range(iterationsPerEpoch):
+            global_turn += 1
             # sample a fraction of users randomly
             if config.random_sampling:
                 np.random.shuffle(userIDs)
@@ -127,7 +132,7 @@ def train(config, logger, record):
                                                      dataset["train_data"],  
                                                      dataset["user_with_data"])
                 updater = LocalUpdater(user_resource)
-                updater.local_step(classifier, optimizer, turn=iteration)
+                updater.local_step(classifier, optimizer, turn=global_turn)
             
             optimizer.step()
 
@@ -141,7 +146,7 @@ def train(config, logger, record):
                 record["testing_accuracy"].append(testAcc)
                 logger.info("Train accuracy {:.4f}   Test accuracy {:.4f}".format(trainAcc, testAcc))
 
-        record["compress_ratio"].append(optimizer.grace.compressRatio)
+        record["compress_ratio"].append(optimizer.grace.compress_ratio)
         logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
         optimizer.grace.reset()
 

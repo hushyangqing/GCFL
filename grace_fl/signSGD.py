@@ -6,7 +6,7 @@ import grace_fl.constant as const
 
 class SignSGDCompressor(Compressor):
 
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
         self.dtype = torch.uint8
         self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
@@ -28,10 +28,10 @@ class SignSGDCompressor(Compressor):
         return decodedTensor
     
     @property
-    def compressRatio(self):
+    def compress_ratio(self):
         return self._const_compress_ratio
 
-    def transAggregation(self, tensor, **kwargs):
+    def trans_aggregation(self, tensor, **kwargs):
         """Transform a raw aggregation sum. 
 
         Args,
