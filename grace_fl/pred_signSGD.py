@@ -13,7 +13,7 @@ class PredSignSGDCompressor(Compressor):
         super().__init__()
         self.dtype = torch.uint8
         self.majority_thres = int(0.5 * config.users * config.sampling_fraction)
-        self._const_compress_ratio = const.FLOAT_BIT / const.BINARY_BIT
+        self._const_compress_ratio = False
         self.compress_ratios = []
 
     def compress(self, tensor, sign):

@@ -111,15 +111,13 @@ def train(config, logger, record):
     optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
     
     dataset = assign_user_data(config)
-    iterationsPerEpoch = np.ceil((dataset["train_data"]["images"].shape[0] * config.sampling_fraction) / config.local_batch_size)
-    iterationsPerEpoch = iterationsPerEpoch.astype(np.int)
-
-
+    iterations_per_epoch = np.ceil((dataset["train_data"]["images"].shape[0] * config.sampling_fraction) / config.local_batch_size)
+    iterations_per_epoch = iterations_per_epoch.astype(np.int)
     
     global_turn = -1
     for epoch in range(config.epoch):
         logger.info("epoch {:02d}".format(epoch))
-        for iteration in range(iterationsPerEpoch):
+        for iteration in range(iterations_per_epoch):
             global_turn += 1
             # sample a fraction of users randomly
             if config.random_sampling:

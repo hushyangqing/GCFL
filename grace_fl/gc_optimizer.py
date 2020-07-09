@@ -74,7 +74,7 @@ class _graceOptimizer(Optimizer):
 
         self._gatheredGradients = []
         for group in self.param_groups:
-            for i, param in enumerate(group["params"]):
+            for param in group["params"]:
                 self._gatheredGradients.append(torch.zeros_like(param))
 
     def gather(self, **kwargs):
@@ -86,7 +86,6 @@ class _graceOptimizer(Optimizer):
                     continue
                     
                 encodedTensor = self.grace.compress(param.grad.data, **kwargs)
-
                 self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)                
                 
                 # clear the gradients for next step, which is equivalent to zero_grad()
@@ -97,11 +96,10 @@ class _graceOptimizer(Optimizer):
         """Performs a single optimization step.
         """
         for group in self.param_groups:
-
             for i, param in enumerate(group['params']):
 
                 d_param = self.grace.trans_aggregation(self._gatheredGradients[i], **kwargs)
-                param.data.add_(-group['lr'], d_param)
+                param.data.add_(d_param, alpha=-group['lr'])
                 self._gatheredGradients[i].zero_()
     
 
@@ -126,7 +124,7 @@ class _predTurnOptimizer(Optimizer):
         self._minus_sign_buffer = []
         self._buffer_empty = True
         for group in self.param_groups:
-            for i, param in enumerate(group["params"]):
+            for param in group["params"]:
                 self._gatheredGradients.append(torch.zeros_like(param))
                 self._plus_sign_buffer.append(torch.zeros_like(param))
                 self._minus_sign_buffer.append(torch.zeros_like(param))
@@ -182,7 +180,8 @@ class _predTurnOptimizer(Optimizer):
                     self._minus_sign_buffer[i].zero_()
                     self._plus_sign_buffer[i] = self.grace.trans_aggregation(self._plus_sign_buffer[i], -self.current_sign)
                 
-                param.data.add_(-group["lr"], self.current_sign*d_param)
+                d_param = self.current_sign * d_param
+                param.data.add_(d_param, alpha=-group["lr"])
                 self._gatheredGradients[i].zero_()
                 
         self._buffer_empty = False

@@ -30,11 +30,13 @@ class Compressor(ABC):
 
 
 from grace_fl.signSGD import SignSGDCompressor
-from grace_fl.predSignSGD import PredSignSGDCompressor
-from grace_fl.predRLESignSGD import PredRLESignSGDCompressor
+from grace_fl.pred_signSGD import PredSignSGDCompressor
+from grace_fl.pred_RLE_signSGD import PredRLESignSGDCompressor
+from grace_fl.ideal_pred_signSGD import IdealBinaryPredSignSGDCompressor
 
 compressor_registry = {
 "signSGD": SignSGDCompressor,
 "pred_signSGD": PredSignSGDCompressor,
+"ideal_pred_signSGD": IdealBinaryPredSignSGDCompressor,
 "pred_rle_signSGD": PredRLESignSGDCompressor
 }

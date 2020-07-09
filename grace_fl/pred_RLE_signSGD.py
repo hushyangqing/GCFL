@@ -16,10 +16,10 @@ def rl_enc(tensor, thres=const.NIBBLE_BIT):
     codedSeqs = []
     runLength = 0
     
-    iter = 0
+    iteration = 0
     bitThreshold = 2**thres 
     for element in clonedTensor:
-        iter += 1
+        iteration += 1
 
         if element == currSymbol:
             runLength += 1
@@ -53,7 +53,7 @@ def rl_dec(codedSeqs):
     runLengths = [codedSeqs[i] for i in range(0, len(codedSeqs), step)]
     
     for symbol, runLength in zip(symbols, runLengths):
-        for iter in range(runLength):
+        for i in range(runLength):
             decodedTensor.append(symbol)
 
     decodedTensor = torch.tensor(decodedTensor)

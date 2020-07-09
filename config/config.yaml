@@ -8,7 +8,7 @@ device: cuda
 # sampling_fraction: the fraction of users to sample
 # iid:              whether the data is iid or non-iid.
 # labelsPerUser:    when data is assigned in a no-iid fashion.
-users: 3
+users: 10
 random_sampling: true
 sampling_fraction: 1
 iid: true
@@ -16,16 +16,16 @@ labelsPerUser: 1
 
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
-local_batch_size: 60000
+local_batch_size: 1024
 lr: 0
 epoch: 40
-model: "naiveMLP"
+model: "naiveCNN"
 
 # compressors: signSGD, pred_rle_signSGD
 # predictive: apply predictive encoding  
 # take_turns: apply the trick of taking turns rto send "+" and "-"
-compressor:   "pred_rle_signSGD"
-# compressor:   "pred_signSGD"
+# compressor:   "pred_rle_signSGD"
+compressor:   "pred_signSGD"
 predictive:   true
 take_turns:   true
 # compressor:   "signSGD"
