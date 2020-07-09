@@ -33,7 +33,7 @@ def assign_data(train_dataset, iid=1, num_users=1, **kwargs):
         train_dataset (dict):     a train_dataset which contains training samples and labels. 
         iid (bool/int):     whether the train_dataset is allocated as iid or non-iid distribution.
         num_users (int):     the number of users.
-        labelsPerUser:      number of labels assigned to the user in no-iid setting.
+        labels_per_user:      number of labels assigned to the user in no-iid setting.
 
     Returns:
         dict:  keys denote userID ranging from [0,...,num_users-1] and values are sampleID
@@ -59,7 +59,7 @@ def assign_data(train_dataset, iid=1, num_users=1, **kwargs):
             user_with_data[userID] = sampleIDs[userID*samples_per_user: (userID+1)*samples_per_user].tolist()
 
     # Assign the train_dataset in a no-iid fashion:
-    # n = labelsPerUser must be included in **kwargs (default:1) 
+    # n = labels_per_user must be included in **kwargs (default:1) 
     # each user is assigned with num_samples/(n*num_users) samples
     else:
         idxs_ascending_labels = np.argsort(train_dataset["labels"])
@@ -96,7 +96,7 @@ def assign_user_data(config):
     user_with_data = assign_data(train_dataset=train_data, 
                               iid=config.iid, 
                               num_users=config.users, 
-                              labelsPerUser=config.labelsPerUser)
+                              labels_per_user=config.labels_per_user)
 
     return dict(train_data=train_data,
                 test_data=test_data,

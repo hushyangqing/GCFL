@@ -85,7 +85,7 @@ class _graceOptimizer(Optimizer):
                 if param.grad is None:
                     continue
                     
-                encodedTensor = self.grace.compress(param.grad.data, **kwargs)
+                encodedTensor = self.grace.compress(param.grad.data)
                 self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)                
                 
                 # clear the gradients for next step, which is equivalent to zero_grad()
@@ -145,7 +145,7 @@ class _predTurnOptimizer(Optimizer):
 
                 # if buffer is empty, encode the gradient
                 if self._buffer_empty:
-                    encodedTensor = self.grace.compress(param.grad.data, turn=self.turn)
+                    encodedTensor = self.grace.compress(param.grad.data, sign=self._current_sign)
                     self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)
                 # if buffer in nonempty, encode the residual
                 elif self.current_sign == 1:

@@ -7,12 +7,12 @@ device: cuda
 # random_sampling:   whether or not perform random sampling before each iteration
 # sampling_fraction: the fraction of users to sample
 # iid:              whether the data is iid or non-iid.
-# labelsPerUser:    when data is assigned in a no-iid fashion.
+# labels_per_user:    when data is assigned in a no-iid fashion.
 users: 10
 random_sampling: true
 sampling_fraction: 1
 iid: true
-labelsPerUser: 1
+labels_per_user: 1
 
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
@@ -25,9 +25,9 @@ model: "naiveCNN"
 # predictive: apply predictive encoding  
 # take_turns: apply the trick of taking turns rto send "+" and "-"
 # compressor:   "pred_rle_signSGD"
-compressor:   "pred_signSGD"
+compressor:   "ideal_pred_signSGD"
 predictive:   true
-take_turns:   true
+take_turns:   false
 # compressor:   "signSGD"
 # predictive:   false
 # take_turns:    false
@@ -38,13 +38,14 @@ take_turns:   true
 # sample_size:   the size of one sample [height x width/num_of_features]
 # classes:      the class of the sample
 record_dir:     ./record.dat
-test_data_dir:  /media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/test.dat
-train_data_dir: /media/kaiyue/7CF8DCC2F8DC7BB8/DataSets/MNIST/Pickle/train.dat
+test_data_dir:  /media/kaiyue/2D8A97B87FB4A806/Datasets/MNIST/test.dat
+train_data_dir: /media/kaiyue/2D8A97B87FB4A806/Datasets/MNIST/train.dat
 sample_size:
 - 28
 - 28
 classes: 10
 
 # Log configurations
+log_iters:   20,
 log_level:   "INFO"
 log_file:    "./train.log"

@@ -22,7 +22,6 @@ class IdealBinaryPredSignSGDCompressor(Compressor):
 
         Args,
             tensor (torch.tensor):  the input tensor.
-            sign (int):             1 for "+" and -1 for "-".
         """
         ones_tensor = torch.ones_like(tensor)
         zeros_tensor = torch.zeros_like(tensor)
@@ -74,6 +73,9 @@ class IdealBinaryPredSignSGDCompressor(Compressor):
         """Take the average of compress ratio array as an estimation."""
         return np.mean(np.asarray(self.compress_ratios))
 
+    def reset(self):
+        self.compress_ratios = []
+
     def trans_aggregation(self, tensor):
         """Transform a raw aggregation sum. 
 
@@ -82,6 +84,6 @@ class IdealBinaryPredSignSGDCompressor(Compressor):
         """
 
         onesTensor = torch.ones_like(tensor)
-        aggedTensor = torch.where(tensor > self.majority_thres, onesTensor, -onesTensor)
+        aggedTensor = torch.where(tensor > 0, onesTensor, -onesTensor)
         return aggedTensor
 

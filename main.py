@@ -134,15 +134,16 @@ def train(config, logger, record):
             
             optimizer.step()
 
-            with torch.no_grad():
-                # log train accuracy
-                trainAcc = train_accuracy(classifier, dataset["train_data"], device=config.device)
+            if iteration%config.log_iters == 0:
+                with torch.no_grad():
+                    # log train accuracy
+                    # trainAcc = train_accuracy(classifier, dataset["train_data"], device=config.device)
 
-                # validate the model and log test accuracy
-                testAcc = test_accuracy(classifier, dataset["test_data"], device=config.device)
-                record["training_accuracy"].append(trainAcc)
-                record["testing_accuracy"].append(testAcc)
-                logger.info("Train accuracy {:.4f}   Test accuracy {:.4f}".format(trainAcc, testAcc))
+                    # validate the model and log test accuracy
+                    testAcc = test_accuracy(classifier, dataset["test_data"], device=config.device)
+                    # record["training_accuracy"].append(trainAcc)
+                    record["testing_accuracy"].append(testAcc)
+                    logger.info("Test accuracy {:.4f}".format(testAcc))
 
         record["compress_ratio"].append(optimizer.grace.compress_ratio)
         logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))

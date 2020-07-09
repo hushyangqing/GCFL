@@ -21,6 +21,9 @@ class Compressor(ABC):
     def compress_ratio(self):
         """Estimated compression ratio of the compressor."""
 
+    def reset(self):
+        """Reset the status."""
+
     def trans_aggregation(self, tensor):
         """Transform a raw aggregation sum."""
 
