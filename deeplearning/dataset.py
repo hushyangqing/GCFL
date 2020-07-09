@@ -116,8 +116,9 @@ def assign_user_resource(config, userID, train_dataset, user_with_data):
     user_resource["labels"] = train_dataset["labels"][sampleIDs]
 
     # As a batch of data has been fetched, it should be put at the end of the sampleIDs list
-    user_with_data[userID][:batch_size], user_with_data[userID][-batch_size:] = \
-    user_with_data[userID][-batch_size:], user_with_data[userID][:batch_size]
+    user_with_data_copy = user_with_data[userID]
+    user_with_data[userID][:-batch_size] = user_with_data_copy[batch_size:]
+    user_with_data[userID][-batch_size:] = user_with_data_copy[:batch_size]
 
     return user_resource
 
