@@ -107,9 +107,8 @@ def train(config, logger, record):
 
     # initialize the optimizer for the server model
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
-    # grace = compressor_registry[config.compressor](config)
-    # optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
-    optimizer = signSGD(optimizer)
+    grace = compressor_registry[config.compressor](config)
+    optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
     criterion = nn.CrossEntropyLoss()
 
     dataset = assign_user_data(config)
@@ -133,45 +132,28 @@ def train(config, logger, record):
                 user_resource = assign_user_resource(config, userID, 
                                                      dataset["train_data"],  
                                                      dataset["user_with_data"])
-                # updater = LocalUpdater(user_resource)
-                # updater.local_step(classifier, optimizer, turn=global_turn)
+                updater = LocalUpdater(user_resource)
+                updater.local_step(classifier, optimizer, turn=global_turn)
             
-            batch_size = config.local_batch_size
-            # trainImages = dataset["train_data"]["images"][iteration*batch_size: (iteration+1)*batch_size]
-            # trainLabels = dataset["train_data"]["labels"][iteration*batch_size: (iteration+1)*batch_size]
-            trainImages = user_resource["images"]
-            trainLabels = user_resource["labels"]
-            trainImages = trainImages.astype(np.float32)/255
-            trainLabels = trainLabels.astype(np.int64)
-            trainImagesTensor = torch.from_numpy(trainImages).to(config.device)
-            trainLabelsTensor = torch.from_numpy(trainLabels).to(config.device)
-
-            optimizer.zero_grad()
-            output = classifier(trainImagesTensor)
-            loss = criterion(output, trainLabelsTensor)
-            loss.backward()
             optimizer.step()
 
             if iteration%config.log_iters == 0:
                 with torch.no_grad():
-                    # log train accuracy
-                    # trainAcc = train_accuracy(classifier, dataset["train_data"], device=config.device)
 
                     # validate the model and log test accuracy
                     testAcc = test_accuracy(classifier, dataset["test_data"], device=config.device)
-                    # record["training_accuracy"].append(trainAcc)
                     record["testing_accuracy"].append(testAcc)
                     logger.info("Test accuracy {:.4f}".format(testAcc))
 
                     if testAcc > config.performance_threshold:
                         brea_flag = True
 
-        # record["compress_ratio"].append(optimizer.grace.compress_ratio)
-        # logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
-        # optimizer.grace.reset()
+        record["compress_ratio"].append(optimizer.grace.compress_ratio)
+        logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
+        optimizer.grace.reset()
 
-        # if brea_flag == True:
-        #     logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
+        if brea_flag == True:
+            logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
 
 def main():
     config = load_config()
