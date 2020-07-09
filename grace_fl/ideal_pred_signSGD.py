@@ -14,7 +14,10 @@ class IdealBinaryPredSignSGDCompressor(Compressor):
         self.dtype = torch.uint8
         self.majority_thres = int(0.5 * config.users * config.sampling_fraction)
         self._const_compress_ratio = False
-        self.compress_ratios = []
+        
+        # total number of symbols (gradient coordinates) & number of residuals
+        self.total_symbols = 0
+        self.residual_symbols = 0
 
     def compress(self, tensor):
         """
@@ -40,11 +43,8 @@ class IdealBinaryPredSignSGDCompressor(Compressor):
         residual = ((tensor > 0) != ref_tensor)
         encodedTensor = residual
 
-        num_elements = torch.sum(residual)
-        ratio_elements = num_elements / np.prod(residual.shape)
-        entropy = -(ratio_elements)*np.log2(ratio_elements) - (1-ratio_elements)*np.log2(1-ratio_elements)
-
-        self.compress_ratios.append(entropy)
+        self.total_symbols += np.prod(residual.shape)
+        self.residual_symbols += torch.sum(residual).item()
 
         return encodedTensor
 
@@ -70,11 +70,15 @@ class IdealBinaryPredSignSGDCompressor(Compressor):
 
     @property
     def compress_ratio(self):
-        """Take the average of compress ratio array as an estimation."""
-        return np.mean(np.asarray(self.compress_ratios))
+        """Use the entropy as a compression estimation."""
+        residual_ratio = self.residual_symbols / self.total_symbols
+        entropy = -residual_ratio*np.log2(residual_ratio) - (1-residual_ratio)*np.log2(1-residual_ratio)
+        print("entropy: {:.3f}".format(entropy))
+        return const.FLOAT_BIT/entropy
 
     def reset(self):
-        self.compress_ratios = []
+        self.total_symbols = 0
+        self.residual_symbols = 0
 
     def trans_aggregation(self, tensor):
         """Transform a raw aggregation sum. 

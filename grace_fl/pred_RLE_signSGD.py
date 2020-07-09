@@ -69,9 +69,12 @@ class PredRLESignSGDCompressor(Compressor):
     def __init__(self, thres):
         super().__init__()
         self._const_compress_ratio = False
-        self.compress_ratios = []
         self._code_dtype_bit = const.WORD_BIT
         self.th = thres
+
+        # total number of symbols (gradient coordinates) & number of residuals
+        self.total_symbols = 0
+        self.residual_symbols = 0
 
     def compress(self, tensor, sign):
         """
@@ -111,11 +114,6 @@ class PredRLESignSGDCompressor(Compressor):
 
         encodedTensor = rl_enc(residual, thres=self._code_dtype_bit)
 
-        # Push dynamic compression ratio
-        rawBits = torch.prod(torch.tensor(tensor.shape)) * const.FLOAT_BIT
-        codedBits = torch.tensor(len(encodedTensor) * self._code_dtype_bit, dtype=torch.float)
-        self.compress_ratios.append(rawBits/codedBits)
-
         return encodedTensor
 
     def decompress(self, codes, shape):
@@ -141,11 +139,15 @@ class PredRLESignSGDCompressor(Compressor):
 
     @property
     def compress_ratio(self):
-        """Take the average of compress ratio array as an estimation."""
-        return np.mean(np.asarray(self.compress_ratios))
+        """Use the entropy as a compression estimation."""
+        residual_ratio = self.residual_symbols / self.total_symbols
+        entropy = -residual_ratio*np.log2(residual_ratio) - (1-residual_ratio)*np.log2(1-residual_ratio)
+
+        return const.FLOAT_BIT/entropy
 
     def reset(self):
-        self.compress_ratios = []
+        self.total_symbols = 0
+        self.residual_symbols = 0
 
     def trans_aggregation(self, tensor):
         """Transform a raw aggregation sum. 

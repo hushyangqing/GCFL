@@ -8,7 +8,7 @@ device: cuda
 # sampling_fraction: the fraction of users to sample
 # iid:              whether the data is iid or non-iid.
 # labels_per_user:    when data is assigned in a no-iid fashion.
-users: 10
+users: 1
 random_sampling: true
 sampling_fraction: 1
 iid: true
@@ -17,9 +17,10 @@ labels_per_user: 1
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
 local_batch_size: 1024
-lr: 0
+lr: 1.e-3
 epoch: 40
-model: "naiveCNN"
+performance_threshold: 0.95
+model: "naiveMLP"
 
 # compressors: signSGD, pred_rle_signSGD
 # predictive: apply predictive encoding  
@@ -46,6 +47,6 @@ sample_size:
 classes: 10
 
 # Log configurations
-log_iters:   20,
+log_iters:   20
 log_level:   "INFO"
 log_file:    "./train.log"

@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from config import load_config
 from deeplearning import nn_registry
 from grace_fl import compressor_registry
-from grace_fl.gc_optimizer import grace_optimizer, LocalUpdater
+from grace_fl.gc_optimizer import grace_optimizer, LocalUpdater, signSGD
 from deeplearning.dataset import UserDataset, assign_user_data, assign_user_resource
 
 def init_logger(config):
@@ -107,14 +107,18 @@ def train(config, logger, record):
 
     # initialize the optimizer for the server model
     optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
-    grace = compressor_registry[config.compressor](config)
-    optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
-    
+    # grace = compressor_registry[config.compressor](config)
+    # optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
+    optimizer = signSGD(optimizer)
+    criterion = nn.CrossEntropyLoss()
+
     dataset = assign_user_data(config)
     iterations_per_epoch = np.ceil((dataset["train_data"]["images"].shape[0] * config.sampling_fraction) / config.local_batch_size)
     iterations_per_epoch = iterations_per_epoch.astype(np.int)
     
     global_turn = -1
+    brea_flag = False
+
     for epoch in range(config.epoch):
         logger.info("epoch {:02d}".format(epoch))
         for iteration in range(iterations_per_epoch):
@@ -129,8 +133,19 @@ def train(config, logger, record):
                 user_resource = assign_user_resource(config, userID, 
                                                      dataset["train_data"],  
                                                      dataset["user_with_data"])
-                updater = LocalUpdater(user_resource)
-                updater.local_step(classifier, optimizer, turn=global_turn)
+                # updater = LocalUpdater(user_resource)
+                # updater.local_step(classifier, optimizer, turn=global_turn)
+            
+            trainImages = user_resource["images"]
+            trainLabels = user_resource["labels"]
+            trainImages = trainImages.astype(np.float32)/255
+            trainLabels = trainLabels.astype(np.int64)
+            trainImagesTensor = torch.from_numpy(trainImages)
+            trainLabelsTensor = torch.from_numpy(trainLabels)
+
+            optimizer.zero_grad()
+            output = classifier(trainImages)
+            loss = criterion(output, trainLabels)
             
             optimizer.step()
 
@@ -145,9 +160,15 @@ def train(config, logger, record):
                     record["testing_accuracy"].append(testAcc)
                     logger.info("Test accuracy {:.4f}".format(testAcc))
 
+                    if testAcc > config.performance_threshold:
+                        brea_flag = True
+
         record["compress_ratio"].append(optimizer.grace.compress_ratio)
         logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
         optimizer.grace.reset()
+
+        if brea_flag == True:
+            logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
 
 def main():
     config = load_config()
