@@ -136,17 +136,20 @@ def train(config, logger, record):
                 # updater = LocalUpdater(user_resource)
                 # updater.local_step(classifier, optimizer, turn=global_turn)
             
+            batch_size = config.local_batch_size
+            # trainImages = dataset["train_data"]["images"][iteration*batch_size: (iteration+1)*batch_size]
+            # trainLabels = dataset["train_data"]["labels"][iteration*batch_size: (iteration+1)*batch_size]
             trainImages = user_resource["images"]
             trainLabels = user_resource["labels"]
             trainImages = trainImages.astype(np.float32)/255
             trainLabels = trainLabels.astype(np.int64)
-            trainImagesTensor = torch.from_numpy(trainImages)
-            trainLabelsTensor = torch.from_numpy(trainLabels)
+            trainImagesTensor = torch.from_numpy(trainImages).to(config.device)
+            trainLabelsTensor = torch.from_numpy(trainLabels).to(config.device)
 
             optimizer.zero_grad()
-            output = classifier(trainImages)
-            loss = criterion(output, trainLabels)
-            
+            output = classifier(trainImagesTensor)
+            loss = criterion(output, trainLabelsTensor)
+            loss.backward()
             optimizer.step()
 
             if iteration%config.log_iters == 0:
@@ -163,12 +166,12 @@ def train(config, logger, record):
                     if testAcc > config.performance_threshold:
                         brea_flag = True
 
-        record["compress_ratio"].append(optimizer.grace.compress_ratio)
-        logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
-        optimizer.grace.reset()
+        # record["compress_ratio"].append(optimizer.grace.compress_ratio)
+        # logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
+        # optimizer.grace.reset()
 
-        if brea_flag == True:
-            logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
+        # if brea_flag == True:
+        #     logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
 
 def main():
     config = load_config()
