@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from config import load_config
 from deeplearning import nn_registry
 from grace_fl import compressor_registry
-from grace_fl.gc_optimizer import grace_optimizer, LocalUpdater, signSGD
+from grace_fl.gc_optimizer import signSGD, grace_optimizer, LocalUpdater
 from deeplearning.dataset import UserDataset, assign_user_data, assign_user_resource
 
 def init_logger(config):
@@ -81,6 +81,9 @@ def train_accuracy(model, train_dataset, device="cuda"):
 
     return accuracy
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 def train(config, logger, record):
     """Simulate Federated Learning training process. 
     
@@ -95,9 +98,11 @@ def train(config, logger, record):
     # Parse the configuration and fetch mode code for the optimizer
     mode = parse_config(config)
 
+    # number of trainable parameters
+    record["num_parameters"] = count_parameters(classifier)
+
     # initialize data record 
     record["compress_ratio"] = []
-    record["training_accuracy"] = []
     record["testing_accuracy"] = []
 
     # initialize userIDs
@@ -106,7 +111,7 @@ def train(config, logger, record):
         userIDs = np.arange(config.users) 
 
     # initialize the optimizer for the server model
-    optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr)
+    optimizer = optim.SGD(params=classifier.parameters(), lr=config.lr, momentum=config.momentum)
     grace = compressor_registry[config.compressor](config)
     optimizer = grace_optimizer(optimizer, grace, mode=mode) # wrap the optimizer
     criterion = nn.CrossEntropyLoss()
@@ -116,10 +121,12 @@ def train(config, logger, record):
     iterations_per_epoch = iterations_per_epoch.astype(np.int)
     
     global_turn = -1
-    brea_flag = False
+    break_flag = False
+    comm_rounds = 0
 
     for epoch in range(config.epoch):
         logger.info("epoch {:02d}".format(epoch))
+        
         for iteration in range(iterations_per_epoch):
             global_turn += 1
             # sample a fraction of users randomly
@@ -130,30 +137,36 @@ def train(config, logger, record):
             # Wait for all users aggregating gradients
             for userID in userIDs_candidates:
                 user_resource = assign_user_resource(config, userID, 
-                                                     dataset["train_data"],  
-                                                     dataset["user_with_data"])
+                                    dataset["train_data"],  
+                                    dataset["user_with_data"]
+                                )
+
                 updater = LocalUpdater(user_resource)
                 updater.local_step(classifier, optimizer, turn=global_turn)
             
             optimizer.step()
 
-            if iteration%config.log_iters == 0:
-                with torch.no_grad():
+        with torch.no_grad():
 
-                    # validate the model and log test accuracy
-                    testAcc = test_accuracy(classifier, dataset["test_data"], device=config.device)
-                    record["testing_accuracy"].append(testAcc)
-                    logger.info("Test accuracy {:.4f}".format(testAcc))
+            # validate the model and log test accuracy
+            testAcc = test_accuracy(classifier, dataset["test_data"], device=config.device)
+            record["testing_accuracy"].append(testAcc)
+            logger.info("Test accuracy {:.4f}".format(testAcc))
+            comm_rounds += 1
+            # comm_rounds += iterations_per_epoch
 
-                    if testAcc > config.performance_threshold:
-                        brea_flag = True
+            if testAcc > config.performance_threshold:
+                break_flag = True
+                break
 
         record["compress_ratio"].append(optimizer.grace.compress_ratio)
-        logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
+        logger.info("compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
         optimizer.grace.reset()
 
-        if brea_flag == True:
-            logger.info("Averaged compression ratio: {:.4f}".format(record["compress_ratio"][-1]))
+        if break_flag == True:
+            logger.info("Total rounds {:d}".format(comm_rounds))
+            record["comm_rounds"] = comm_rounds
+            break
 
 def main():
     config = load_config()

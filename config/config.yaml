@@ -17,9 +17,10 @@ labels_per_user: 1
 # hyperparameters and model type
 # model:        "naiveMLP", "naiveCNN"
 local_batch_size: 1024
-lr: 1.e-3
+lr: 1.e-4
 epoch: 40
-performance_threshold: 0.95
+momentum: 0
+performance_threshold: 0.1
 model: "naiveMLP"
 
 # compressors: signSGD, pred_rle_signSGD
@@ -27,9 +28,10 @@ model: "naiveMLP"
 # take_turns: apply the trick of taking turns rto send "+" and "-"
 # compressor:   "pred_rle_signSGD"
 compressor:   "ideal_pred_signSGD"
+# compressor:   "signSGD"
 predictive:   true
 take_turns:   false
-# compressor:   "signSGD"
+
 # predictive:   false
 # take_turns:    false
 

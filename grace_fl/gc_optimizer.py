@@ -26,7 +26,6 @@ class LocalUpdater(object):
         
         
         try:
-            self.lr = user_resource["lr"]
             self.batchSize = user_resource["batch_size"]
             self.device = user_resource["device"]
 
@@ -38,8 +37,7 @@ class LocalUpdater(object):
             logging.error("LocalUpdater Initialization Failure! Input should include samples!") 
 
         self.sampleLoader = DataLoader(UserDataset(user_resource["images"], user_resource["labels"]), 
-                            batch_size=self.batchSize, 
-                            shuffle=True
+                                batch_size=self.batchSize
                             )
         self.criterion = nn.CrossEntropyLoss()
 
@@ -55,8 +53,6 @@ class LocalUpdater(object):
             loss = self.criterion(output, label)
             loss.backward()
             optimizer.gather(**kwargs)
-
-            break
 
 class _graceOptimizer(Optimizer):
     """
@@ -128,6 +124,7 @@ class _predOptimizer(Optimizer):
         """Gather local gradients.
         """
         for group in self.param_groups:
+            momentum = group["momentum"]
             for i, param in enumerate(group['params']):
                 if param.grad is None:
                     continue
@@ -136,9 +133,9 @@ class _predOptimizer(Optimizer):
                 if self._buffer_empty:
                     encodedTensor = self.grace.compress(param.grad.data)
                     self._gatheredGradients[i] += self.grace.decompress(encodedTensor, shape=param.grad.data.shape)
-                # if buffer in nonempty, encode the residual
+                # if buffer is nonempty, encode the residual
                 else:
-                    encodedTensor = self.grace.compress_with_reference(param.grad, self._buffer[i])
+                    encodedTensor = self.grace.compress_with_reference(param.grad.data, self._buffer[i])
                     self._gatheredGradients[i] += self.grace.decompress_with_reference(encodedTensor, self._buffer[i])
 
                 # clear the gradients for next step, which is equivalent to zero_grad()
@@ -150,13 +147,35 @@ class _predOptimizer(Optimizer):
         """Performs a single optimization step.
         """
         for group in self.param_groups:
+            momentum = group["momentum"]
+
             for i, param in enumerate(group['params']):
                 d_param = self.grace.trans_aggregation(self._gatheredGradients[i])
+                
+                if momentum != 0:
+                    param_state = self.state[param]
+                    if 'momentum_buffer' not in param_state:
+                        buf = param_state['momentum_buffer'] = torch.clone(d_param).detach()
+                    else:
+                        buf = param_state['momentum_buffer']
+                        buf.mul_(momentum).add_(d_param)
+
+                    # compress the broadcast tensor
+                    if self._buffer_empty:
+                        encodedTensor = self.grace.compress(d_param)
+                        d_param = self.grace.decompress(encodedTensor, shape=param.data.shape)
+                    # if buffer is nonempty, encode the residual
+                    else:
+                        # ones_tensor = torch.ones_like(param)
+                        # d_param = torch.where(buf>0, ones_tensor, -ones_tensor)
+                        encodedTensor = self.grace.compress_with_reference(d_param, self._buffer[i])
+                        d_param = self.grace.decompress_with_reference(encodedTensor, self._buffer[i])
+            
                 param.data.add_(d_param, alpha=-group["lr"])
                 self._gatheredGradients[i].zero_()
                 
                 # register buffer
-                self._buffer[i] = d_param
+                self._buffer[i] = torch.clone(d_param).detach()
 
         self._buffer_empty = False
 
@@ -284,3 +303,45 @@ def grace_optimizer(optimizer, grace, **kwargs):
             dict(_graceOptimizer.__dict__))
 
     return cls(optimizer.param_groups, grace, **kwargs)
+
+class _signSGD(Optimizer):
+    """
+    A warpper optimizer gather gradients from local users and overwrite 
+    step() method for the server.
+    Args:
+        params (nn.Module.parameters): model learnable parameters.
+    """
+    def __init__(self, params):
+        super(self.__class__, self).__init__(params)
+    
+    @torch.no_grad()
+    def step(self, **kwargs):
+        """Performs a single optimization step.
+        """
+        for group in self.param_groups:
+            for param in group['params']:
+                
+                if param.grad is None:
+                    continue
+                
+                ones_tensor = torch.ones_like(param)
+                d_p = torch.where(param.grad>0, ones_tensor, -ones_tensor)
+                
+                param.add_(d_p, alpha=-group["lr"])
+
+def signSGD(optimizer):
+    """
+    An optimizer that wraps another torch.optim.Optimizer.
+    Allreduce operations are executed after each gradient is computed by ``loss.backward()``
+    in parallel with each other. The ``step()`` method ensures that all allreduce operations are
+    finished before applying gradients to the model.
+    Args:
+        optimizer (torch.nn.optim.Optimizer):   Optimizer to use for computing gradients and applying updates.
+    """
+    # We dynamically create a new class that inherits from the optimizer that was passed in.
+    # The goal is to override the `step()` method.
+
+
+    cls = type(optimizer.__class__.__name__, (optimizer.__class__,), dict(_signSGD.__dict__))
+
+    return cls(optimizer.param_groups)

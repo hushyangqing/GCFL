@@ -10,7 +10,7 @@ class UserDataset(Dataset):
     def __init__(self, images, labels):
         """Construct a user train_dataset and convert ndarray 
         """
-        images = (images/255).astype(np.float32)
+        images = (images).astype(np.float32)/255
         labels = (labels).astype(np.int64)
         self.images = torch.from_numpy(images)
         self.labels = torch.from_numpy(labels)
